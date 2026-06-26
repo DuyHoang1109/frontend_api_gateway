@@ -8,6 +8,7 @@ import {
   KeyRound,
   LayoutDashboard,
   ListChecks,
+  LogIn,
   Lock,
   Network,
   PlugZap,
@@ -17,11 +18,14 @@ import {
   Shield,
   SlidersHorizontal,
   TerminalSquare,
+  UserCircle,
   Users
 } from 'lucide-react';
 
 export const sections = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'login', label: 'Login', icon: LogIn },
+  { id: 'profile', label: 'Profile', icon: UserCircle },
   { id: 'info', label: 'Info', icon: CircleDot },
   { id: 'services', label: 'Services', icon: Cloud },
   { id: 'instances', label: 'Instances', icon: Server },

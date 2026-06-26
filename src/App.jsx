@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Loader2, RefreshCcw, Save, Search } from 'lucide-react';
-import { createGatewayAdminApi, getSavedBaseUrl, saveBaseUrl } from './api/gatewayAdminApi.js';
+import { Loader2, LogIn, LogOut, RefreshCcw, Save, Search, UserCircle } from 'lucide-react';
+import {
+  clearAccessToken,
+  createGatewayAdminApi,
+  getSavedBaseUrl,
+  saveAccessToken,
+  saveBaseUrl
+} from './api/gatewayAdminApi.js';
 import { backendFeatureStatus, sections, standaloneFeaturePages } from './config/navigation.jsx';
 import {
   defaultInstanceForm,
@@ -18,15 +24,18 @@ import HealthChecksPage from './pages/HealthChecksPage.jsx';
 import InfoPage from './pages/InfoPage.jsx';
 import InstancesPage from './pages/InstancesPage.jsx';
 import KongaFeaturePage from './pages/KongaFeaturePage.jsx';
+import LoginPage from './pages/LoginPage.jsx';
+import ProfilePage from './pages/ProfilePage.jsx';
 import RoutesPage from './pages/RoutesPage.jsx';
 import ServicesPage from './pages/ServicesPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 import UpstreamsPage from './pages/UpstreamsPage.jsx';
 
 export default function App() {
-  const [activeSection, setActiveSection] = useState('dashboard');
+  const [activeSection, setActiveSection] = useState('login');
   const [baseUrl, setBaseUrl] = useState(getSavedBaseUrl());
-  const api = useMemo(() => createGatewayAdminApi(baseUrl), [baseUrl]);
+  const [accessToken, setAccessToken] = useState('');
+  const api = useMemo(() => createGatewayAdminApi(baseUrl, accessToken), [baseUrl, accessToken]);
 
   const [services, setServices] = useState([]);
   const [instances, setInstances] = useState([]);
@@ -37,11 +46,17 @@ export default function App() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [search, setSearch] = useState('');
+  const [authUser, setAuthUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(false);
   const [selected, setSelected] = useState(null);
   const [serviceForm, setServiceForm] = useState(defaultServiceForm);
   const [instanceForm, setInstanceForm] = useState(defaultInstanceForm);
   const [routeForm, setRouteForm] = useState(defaultRouteForm);
   const [editing, setEditing] = useState({ type: '', id: '' });
+
+  useEffect(() => {
+    clearAccessToken();
+  }, []);
 
   async function loadAll() {
     setLoading(true);
@@ -72,12 +87,75 @@ export default function App() {
   }
 
   useEffect(() => {
-    loadAll();
-  }, [api]);
+    if (authUser) {
+      loadAll();
+    } else {
+      setLoading(false);
+    }
+  }, [api, authUser]);
+
+  useEffect(() => {
+    loadCurrentUser();
+  }, [api, accessToken]);
+
+  async function loadCurrentUser() {
+    if (!accessToken) {
+      setAuthUser(null);
+      return;
+    }
+
+    try {
+      const currentUser = await api.me();
+      setAuthUser(currentUser);
+      if (activeSection === 'login') {
+        setActiveSection('dashboard');
+      }
+    } catch {
+      clearAccessToken();
+      setAccessToken('');
+      setAuthUser(null);
+      setActiveSection('login');
+    }
+  }
+
+  function navigate(sectionId) {
+    if (!authUser && sectionId !== 'login') {
+      setActiveSection('login');
+      return;
+    }
+
+    setActiveSection(sectionId);
+  }
 
   function persistBaseUrl() {
     setBaseUrl(saveBaseUrl(baseUrl));
     setNotice('Gateway URL saved');
+  }
+
+  async function login(credentials) {
+    setAuthLoading(true);
+    setError('');
+
+    try {
+      const result = await api.login(credentials);
+      saveAccessToken(result.access_token);
+      setAccessToken(result.access_token);
+      setAuthUser(result.user);
+      setNotice('Signed in');
+      setActiveSection('dashboard');
+    } catch (err) {
+      setError(err.message || 'Cannot sign in');
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  function logout() {
+    clearAccessToken();
+    setAccessToken('');
+    setAuthUser(null);
+    setNotice('Signed out');
+    setActiveSection('login');
   }
 
   function serviceName(serviceId) {
@@ -200,6 +278,8 @@ export default function App() {
   const filteredServices = filterRows(services, search);
   const filteredInstances = filterRows(instances, search);
   const filteredRoutes = filterRows(routes, search);
+  const isAuthenticated = Boolean(authUser);
+  const visibleSections = isAuthenticated ? sections : sections.filter((section) => section.id === 'login');
 
   return (
     <div className="app-shell">
@@ -213,13 +293,13 @@ export default function App() {
         </div>
 
         <nav className="nav-list">
-          {sections.map((section) => {
+          {visibleSections.map((section) => {
             const Icon = section.icon;
             return (
               <button
                 key={section.id}
                 className={activeSection === section.id ? 'active' : ''}
-                onClick={() => setActiveSection(section.id)}
+                onClick={() => navigate(section.id)}
                 title={section.label}
               >
                 <Icon size={18} />
@@ -247,32 +327,67 @@ export default function App() {
             <button className="icon-button" onClick={loadAll} title="Reload data">
               {loading ? <Loader2 className="spin" size={18} /> : <RefreshCcw size={18} />}
             </button>
+            {authUser ? (
+              <div className="topbar-auth">
+                <button className="ghost-button" type="button" onClick={() => navigate('profile')}>
+                  <UserCircle size={17} />
+                  {authUser.username}
+                </button>
+                <button className="icon-button" type="button" onClick={logout} title="Logout">
+                  <LogOut size={17} />
+                </button>
+              </div>
+            ) : (
+              <button className="ghost-button" type="button" onClick={() => navigate('login')}>
+                <LogIn size={17} />
+                Login
+              </button>
+            )}
           </div>
         </header>
 
-        <div className="status-row">
-          <div className="search-box">
-            <Search size={17} />
-            <input placeholder="Search services, routes, instances..." value={search} onChange={(event) => setSearch(event.target.value)} />
+        {isAuthenticated && (
+          <div className="status-row">
+            <div className="search-box">
+              <Search size={17} />
+              <input placeholder="Search services, routes, instances..." value={search} onChange={(event) => setSearch(event.target.value)} />
+            </div>
+            <StatusPill active={Boolean(health)} label={health ? 'Gateway reachable' : 'Gateway unknown'} />
           </div>
-          <StatusPill active={Boolean(health)} label={health ? 'Gateway reachable' : 'Gateway unknown'} />
-        </div>
+        )}
 
         {error && <Alert type="error" message={error} onClose={() => setError('')} />}
         {notice && <Alert type="success" message={notice} onClose={() => setNotice('')} />}
 
-        {activeSection === 'dashboard' && (
+        {activeSection === 'login' && (
+          <LoginPage
+            currentUser={authUser}
+            loading={authLoading}
+            onLogin={login}
+            onNavigate={navigate}
+          />
+        )}
+
+        {isAuthenticated && activeSection === 'profile' && (
+          <ProfilePage
+            user={authUser}
+            onLogout={logout}
+            onNavigate={navigate}
+          />
+        )}
+
+        {isAuthenticated && activeSection === 'dashboard' && (
           <Dashboard
             services={services}
             instances={instances}
             routes={routes}
             health={health}
             ready={ready}
-            onNavigate={setActiveSection}
+            onNavigate={navigate}
           />
         )}
 
-        {activeSection === 'info' && (
+        {isAuthenticated && activeSection === 'info' && (
           <InfoPage
             baseUrl={baseUrl}
             health={health}
@@ -283,7 +398,7 @@ export default function App() {
           />
         )}
 
-        {activeSection === 'services' && (
+        {isAuthenticated && activeSection === 'services' && (
           <ServicesPage
             services={filteredServices}
             form={serviceForm}
@@ -299,7 +414,7 @@ export default function App() {
           />
         )}
 
-        {activeSection === 'instances' && (
+        {isAuthenticated && activeSection === 'instances' && (
           <InstancesPage
             services={services}
             instances={filteredInstances}
@@ -315,7 +430,7 @@ export default function App() {
           />
         )}
 
-        {activeSection === 'routes' && (
+        {isAuthenticated && activeSection === 'routes' && (
           <RoutesPage
             services={services}
             routes={filteredRoutes}
@@ -331,16 +446,16 @@ export default function App() {
           />
         )}
 
-        {activeSection === 'upstreams' && (
+        {isAuthenticated && activeSection === 'upstreams' && (
           <UpstreamsPage
             services={services}
             instances={filteredInstances}
             serviceName={serviceName}
-            onNavigate={setActiveSection}
+            onNavigate={navigate}
           />
         )}
 
-        {activeSection === 'healthchecks' && (
+        {isAuthenticated && activeSection === 'healthchecks' && (
           <HealthChecksPage
             health={health}
             ready={ready}
@@ -350,7 +465,7 @@ export default function App() {
           />
         )}
 
-        {activeSection === 'connections' && (
+        {isAuthenticated && activeSection === 'connections' && (
           <ConnectionsPage
             baseUrl={baseUrl}
             setBaseUrl={setBaseUrl}
@@ -358,7 +473,7 @@ export default function App() {
           />
         )}
 
-        {activeSection === 'settings' && (
+        {isAuthenticated && activeSection === 'settings' && (
           <SettingsPage
             baseUrl={baseUrl}
             setBaseUrl={setBaseUrl}
@@ -369,13 +484,13 @@ export default function App() {
           />
         )}
 
-        {backendFeatureStatus[activeSection] && !standaloneFeaturePages.includes(activeSection) && (
+        {isAuthenticated && backendFeatureStatus[activeSection] && !standaloneFeaturePages.includes(activeSection) && (
           <KongaFeaturePage
             feature={backendFeatureStatus[activeSection]}
             services={services}
             routes={routes}
             instances={instances}
-            onNavigate={setActiveSection}
+            onNavigate={navigate}
           />
         )}
       </main>
