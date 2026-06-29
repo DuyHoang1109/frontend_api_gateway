@@ -1,11 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Loader2, LogIn, LogOut, RefreshCcw, Save, Search, UserCircle } from 'lucide-react';
 import {
-  clearAccessToken,
+  clearAuthTokens,
   createGatewayAdminApi,
+  getSavedAccessToken,
   getSavedBaseUrl,
+  getSavedRefreshToken,
   saveAccessToken,
-  saveBaseUrl
+  saveBaseUrl,
+  saveRefreshToken
 } from './api/gatewayAdminApi.js';
 import { backendFeatureStatus, sections, standaloneFeaturePages } from './config/navigation.jsx';
 import {
@@ -34,8 +37,15 @@ import UpstreamsPage from './pages/UpstreamsPage.jsx';
 export default function App() {
   const [activeSection, setActiveSection] = useState('login');
   const [baseUrl, setBaseUrl] = useState(getSavedBaseUrl());
-  const [accessToken, setAccessToken] = useState('');
-  const api = useMemo(() => createGatewayAdminApi(baseUrl, accessToken), [baseUrl, accessToken]);
+  const [accessToken, setAccessToken] = useState(getSavedAccessToken());
+  const api = useMemo(() => createGatewayAdminApi(baseUrl, accessToken, {
+    onTokensRefreshed: (tokens) => setAccessToken(tokens.access_token),
+    onAuthFailure: () => {
+      setAccessToken('');
+      setAuthUser(null);
+      setActiveSection('login');
+    }
+  }), [baseUrl, accessToken]);
 
   const [services, setServices] = useState([]);
   const [instances, setInstances] = useState([]);
@@ -53,10 +63,6 @@ export default function App() {
   const [instanceForm, setInstanceForm] = useState(defaultInstanceForm);
   const [routeForm, setRouteForm] = useState(defaultRouteForm);
   const [editing, setEditing] = useState({ type: '', id: '' });
-
-  useEffect(() => {
-    clearAccessToken();
-  }, []);
 
   async function loadAll() {
     setLoading(true);
@@ -111,7 +117,7 @@ export default function App() {
         setActiveSection('dashboard');
       }
     } catch {
-      clearAccessToken();
+      clearAuthTokens();
       setAccessToken('');
       setAuthUser(null);
       setActiveSection('login');
@@ -139,6 +145,7 @@ export default function App() {
     try {
       const result = await api.login(credentials);
       saveAccessToken(result.access_token);
+      saveRefreshToken(result.refresh_token);
       setAccessToken(result.access_token);
       setAuthUser(result.user);
       setNotice('Signed in');
@@ -150,12 +157,25 @@ export default function App() {
     }
   }
 
-  function logout() {
-    clearAccessToken();
-    setAccessToken('');
-    setAuthUser(null);
-    setNotice('Signed out');
-    setActiveSection('login');
+  async function logout() {
+    setAuthLoading(true);
+    setError('');
+
+    try {
+      const refreshToken = getSavedRefreshToken();
+      if (accessToken && refreshToken) {
+        await api.logout(refreshToken);
+      }
+      setNotice('Signed out');
+    } catch (err) {
+      setError(`${err.message || 'Cannot reach logout endpoint'}. Local session was cleared.`);
+    } finally {
+      clearAuthTokens();
+      setAccessToken('');
+      setAuthUser(null);
+      setActiveSection('login');
+      setAuthLoading(false);
+    }
   }
 
   function serviceName(serviceId) {

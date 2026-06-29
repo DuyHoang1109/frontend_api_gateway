@@ -3,7 +3,7 @@ import { LogIn, ShieldCheck } from 'lucide-react';
 import { Field, Panel } from '../components/common.jsx';
 
 export default function LoginPage({ currentUser, loading, onLogin, onNavigate }) {
-  const [form, setForm] = useState({ username: 'admin_test', password: '123456' });
+  const [form, setForm] = useState({ username: '', password: '' });
 
   async function submit(event) {
     event.preventDefault();
@@ -34,6 +34,7 @@ export default function LoginPage({ currentUser, loading, onLogin, onNavigate })
           <Field
             label="Username or Email"
             value={form.username}
+            placeholder="Enter your username or email"
             required
             onChange={(value) => setForm((current) => ({ ...current, username: value }))}
           />
@@ -41,6 +42,7 @@ export default function LoginPage({ currentUser, loading, onLogin, onNavigate })
             label="Password"
             type="password"
             value={form.password}
+            placeholder="Enter your password"
             required
             onChange={(value) => setForm((current) => ({ ...current, password: value }))}
           />
@@ -59,11 +61,11 @@ export default function LoginPage({ currentUser, loading, onLogin, onNavigate })
           </div>
           <div>
             <strong>2. Store token</strong>
-            <span>The dashboard keeps the access token locally.</span>
+            <span>The dashboard keeps the access and refresh tokens locally.</span>
           </div>
           <div>
-            <strong>3. Load profile</strong>
-            <span>GET /auth/me with Authorization: Bearer token.</span>
+            <strong>3. Renew session</strong>
+            <span>Expired access tokens are renewed through POST /auth/refresh.</span>
           </div>
         </div>
       </Panel>
