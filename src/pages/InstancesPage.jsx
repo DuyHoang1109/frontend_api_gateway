@@ -1,8 +1,8 @@
 import React from 'react';
-import { EmptyState, Field, FormActions, Panel, RowActions, SelectField, StatusPill, Toggle } from '../components/common.jsx';
+import { EmptyState, Field, FormActions, Pagination, Panel, RowActions, SelectField, StatusPill, Toggle } from '../components/common.jsx';
 
 export default function InstancesPage(props) {
-  const { services, instances, form, setForm, editing, onSubmit, onCancel, onEdit, onDelete, onInspect, serviceName } = props;
+  const { services, instances, form, setForm, editing, onSubmit, onCancel, onEdit, onDelete, onInspect, serviceName, page, pageSize, totalItems, onPageChange } = props;
 
   return (
     <section className="content-stack">
@@ -43,6 +43,7 @@ export default function InstancesPage(props) {
           </tbody>
         </table>
         {instances.length === 0 && <EmptyState text="No instances found" />}
+        <Pagination page={page} pageSize={pageSize} totalItems={totalItems} onPageChange={onPageChange} />
       </Panel>
     </section>
   );

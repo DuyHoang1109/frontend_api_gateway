@@ -67,9 +67,16 @@ export const backendFeatureStatus = {
   },
   'api-keys': {
     title: 'API Keys',
-    status: 'missing',
-    endpoints: ['GET /admin/api-keys', 'POST /admin/api-keys', 'DELETE /admin/api-keys/:id'],
-    summary: 'Gateway schema has API key related data, but frontend can only bind it after admin endpoints are added.'
+    status: 'bound',
+    endpoints: [
+      'POST /admin/api-keys',
+      'GET /admin/api-keys',
+      'GET /admin/api-keys/:id',
+      'PUT /admin/api-keys/:id',
+      'POST /admin/api-keys/:id/revoke',
+      'POST /admin/api-keys/:id/rotate'
+    ],
+    summary: 'Create, inspect, update, revoke, and rotate hashed API keys. Raw keys are shown only after create or rotate.'
   },
   'rate-limits': {
     title: 'Rate Limits',
@@ -103,9 +110,9 @@ export const backendFeatureStatus = {
   },
   healthchecks: {
     title: 'Health Checks',
-    status: 'partial',
-    endpoints: ['GET /health', 'GET /ready'],
-    summary: 'Gateway self health is bound. Per-service instance health checks still need backend endpoints.'
+    status: 'bound',
+    endpoints: ['GET /health', 'GET /ready', 'GET /admin/services/:id/health', 'GET /admin/instances/:id/health', 'POST /admin/instances/:id/health-check'],
+    summary: 'Gateway, service, and instance health status are bound, including manual instance probes.'
   },
   logs: {
     title: 'Logs & Monitoring',
@@ -133,10 +140,10 @@ export const backendFeatureStatus = {
   },
   settings: {
     title: 'Settings',
-    status: 'local',
-    endpoints: ['localStorage gateway_admin_base_url'],
-    summary: 'Current settings are local dashboard preferences and Gateway base URL.'
+    status: 'partial',
+    endpoints: ['localStorage gateway_admin_base_url', 'GET /admin/cache/version', 'POST /admin/cache/reload'],
+    summary: 'Gateway URL preferences and runtime configuration cache controls are bound.'
   }
 };
 
-export const standaloneFeaturePages = ['info', 'upstreams', 'healthchecks', 'connections', 'settings'];
+export const standaloneFeaturePages = ['info', 'api-keys', 'upstreams', 'healthchecks', 'connections', 'settings'];

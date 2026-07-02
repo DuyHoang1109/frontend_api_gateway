@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Database, Edit3, Plus, Save, Trash2, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Database, Edit3, Plus, Save, Trash2, X } from 'lucide-react';
 import { backendFeatureStatus } from '../config/navigation.jsx';
 
 export function Panel({ title, eyebrow, children, className = '' }) {
@@ -179,4 +179,37 @@ export function DetailModal({ title, record, onClose }) {
 
 export function EmptyState({ text }) {
   return <div className="empty-state">{text}</div>;
+}
+
+export function Pagination({ page, pageSize, totalItems, onPageChange }) {
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const safePage = Math.min(Math.max(page, 1), totalPages);
+  const start = totalItems === 0 ? 0 : ((safePage - 1) * pageSize) + 1;
+  const end = Math.min(safePage * pageSize, totalItems);
+
+  return (
+    <div className="pagination-bar">
+      <span>Showing {start}-{end} of {totalItems}</span>
+      <div className="pagination-controls" aria-label="Pagination">
+        <button className="icon-button" type="button" onClick={() => onPageChange(safePage - 1)} disabled={safePage === 1} title="Previous page">
+          <ChevronLeft size={16} />
+        </button>
+        {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+          <button
+            className={`page-button ${pageNumber === safePage ? 'active' : ''}`}
+            type="button"
+            key={pageNumber}
+            onClick={() => onPageChange(pageNumber)}
+            aria-label={`Page ${pageNumber}`}
+            aria-current={pageNumber === safePage ? 'page' : undefined}
+          >
+            {pageNumber}
+          </button>
+        ))}
+        <button className="icon-button" type="button" onClick={() => onPageChange(safePage + 1)} disabled={safePage === totalPages} title="Next page">
+          <ChevronRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
 }

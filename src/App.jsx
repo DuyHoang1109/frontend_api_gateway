@@ -22,6 +22,7 @@ import {
 import { filterRows } from './utils/filterRows.js';
 import { Alert, DetailModal, StatusPill } from './components/common.jsx';
 import ConnectionsPage from './pages/ConnectionsPage.jsx';
+import APIKeysPage from './pages/APIKeysPage.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import HealthChecksPage from './pages/HealthChecksPage.jsx';
 import InfoPage from './pages/InfoPage.jsx';
@@ -34,8 +35,12 @@ import ServicesPage from './pages/ServicesPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 import UpstreamsPage from './pages/UpstreamsPage.jsx';
 
+const PAGE_SIZE = 5;
+const PAGINATED_SECTIONS = new Set(['services', 'instances', 'routes']);
+const LAST_SECTION_KEY = 'gateway_admin_last_section';
+
 export default function App() {
-  const [activeSection, setActiveSection] = useState('login');
+  const [activeSection, setActiveSection] = useState(() => getInitialSection());
   const [baseUrl, setBaseUrl] = useState(getSavedBaseUrl());
   const [accessToken, setAccessToken] = useState(getSavedAccessToken());
   const api = useMemo(() => createGatewayAdminApi(baseUrl, accessToken, {
@@ -52,6 +57,12 @@ export default function App() {
   const [routes, setRoutes] = useState([]);
   const [health, setHealth] = useState(null);
   const [ready, setReady] = useState(null);
+  const [serviceHealth, setServiceHealth] = useState({});
+  const [instanceHealth, setInstanceHealth] = useState({});
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [checkingInstanceId, setCheckingInstanceId] = useState('');
+  const [cacheStatus, setCacheStatus] = useState(null);
+  const [cacheLoading, setCacheLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -63,18 +74,20 @@ export default function App() {
   const [instanceForm, setInstanceForm] = useState(defaultInstanceForm);
   const [routeForm, setRouteForm] = useState(defaultRouteForm);
   const [editing, setEditing] = useState({ type: '', id: '' });
+  const [pages, setPages] = useState(() => getInitialPages());
 
   async function loadAll() {
     setLoading(true);
     setError('');
 
     try {
-      const [healthResult, readyResult, servicesResult, instancesResult, routesResult] = await Promise.allSettled([
+      const [healthResult, readyResult, servicesResult, instancesResult, routesResult, cacheResult] = await Promise.allSettled([
         api.health(),
         api.ready(),
         api.listServices(),
         api.listInstances(),
-        api.listRoutes()
+        api.listRoutes(),
+        api.getCacheVersion()
       ]);
 
       if (healthResult.status === 'fulfilled') setHealth(healthResult.value);
@@ -82,6 +95,7 @@ export default function App() {
       if (servicesResult.status === 'fulfilled') setServices(servicesResult.value);
       if (instancesResult.status === 'fulfilled') setInstances(instancesResult.value);
       if (routesResult.status === 'fulfilled') setRoutes(routesResult.value);
+      if (cacheResult.status === 'fulfilled') setCacheStatus(cacheResult.value);
 
       const rejected = [servicesResult, instancesResult, routesResult].find((item) => item.status === 'rejected');
       if (rejected) throw rejected.reason;
@@ -103,6 +117,29 @@ export default function App() {
   useEffect(() => {
     loadCurrentUser();
   }, [api, accessToken]);
+
+  useEffect(() => {
+    if (!authUser) return;
+    persistLocation(activeSection, pages[activeSection] || 1);
+  }, [activeSection, authUser, pages]);
+
+  useEffect(() => {
+    const onPopState = () => {
+      const section = sectionFromLocation();
+      setActiveSection(section);
+      if (PAGINATED_SECTIONS.has(section)) {
+        setPages((current) => ({ ...current, [section]: pageFromLocation() }));
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  useEffect(() => {
+    if (!authUser) return;
+    if (activeSection === 'healthchecks' || activeSection === 'services') loadDetailedHealth();
+    if (activeSection === 'settings') loadCacheVersion();
+  }, [activeSection, authUser, api, services, instances]);
 
   async function loadCurrentUser() {
     if (!accessToken) {
@@ -131,6 +168,12 @@ export default function App() {
     }
 
     setActiveSection(sectionId);
+  }
+
+  function changePage(section, page) {
+    const total = section === 'services' ? filteredServices.length : section === 'instances' ? filteredInstances.length : filteredRoutes.length;
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    setPages((current) => ({ ...current, [section]: Math.min(Math.max(page, 1), totalPages) }));
   }
 
   function persistBaseUrl() {
@@ -175,6 +218,66 @@ export default function App() {
       setAuthUser(null);
       setActiveSection('login');
       setAuthLoading(false);
+    }
+  }
+
+  async function loadDetailedHealth() {
+    setHealthLoading(true);
+    try {
+      const serviceEntries = await Promise.all(services.map(async (service) => {
+        try {
+          return [service.id, await api.getServiceHealth(service.id)];
+        } catch (err) {
+          return [service.id, { status: 'unknown', error: err.message }];
+        }
+      }));
+      const instanceEntries = await Promise.all(instances.map(async (instance) => {
+        try {
+          return [instance.id, await api.getInstanceHealth(instance.id)];
+        } catch (err) {
+          return [instance.id, { status: 'unknown', error: err.message }];
+        }
+      }));
+      setServiceHealth(Object.fromEntries(serviceEntries));
+      setInstanceHealth(Object.fromEntries(instanceEntries));
+    } finally {
+      setHealthLoading(false);
+    }
+  }
+
+  async function checkInstanceHealth(instanceId) {
+    setCheckingInstanceId(instanceId);
+    setError('');
+    try {
+      const result = await api.checkInstanceHealth(instanceId);
+      setInstanceHealth((current) => ({ ...current, [instanceId]: result }));
+      setNotice('Instance health check completed');
+    } catch (err) {
+      setError(err.message || 'Health check failed');
+    } finally {
+      setCheckingInstanceId('');
+    }
+  }
+
+  async function loadCacheVersion() {
+    try {
+      setCacheStatus(await api.getCacheVersion());
+    } catch (err) {
+      setError(err.message || 'Cannot load cache version');
+    }
+  }
+
+  async function reloadCache() {
+    setCacheLoading(true);
+    setError('');
+    try {
+      const result = await api.reloadCache();
+      setCacheStatus(result);
+      setNotice('Gateway configuration cache reloaded');
+    } catch (err) {
+      setError(err.message || 'Cannot reload cache');
+    } finally {
+      setCacheLoading(false);
     }
   }
 
@@ -298,6 +401,9 @@ export default function App() {
   const filteredServices = filterRows(services, search);
   const filteredInstances = filterRows(instances, search);
   const filteredRoutes = filterRows(routes, search);
+  const servicePage = pageSlice(filteredServices, pages.services, PAGE_SIZE);
+  const instancePage = pageSlice(filteredInstances, pages.instances, PAGE_SIZE);
+  const routePage = pageSlice(filteredRoutes, pages.routes, PAGE_SIZE);
   const isAuthenticated = Boolean(authUser);
   const visibleSections = isAuthenticated ? sections : sections.filter((section) => section.id === 'login');
 
@@ -370,7 +476,12 @@ export default function App() {
           <div className="status-row">
             <div className="search-box">
               <Search size={17} />
-              <input placeholder="Search services, routes, instances..." value={search} onChange={(event) => setSearch(event.target.value)} />
+              <input placeholder="Search services, routes, instances..." value={search} onChange={(event) => {
+                setSearch(event.target.value);
+                if (PAGINATED_SECTIONS.has(activeSection)) {
+                  setPages((current) => ({ ...current, [activeSection]: 1 }));
+                }
+              }} />
             </div>
             <StatusPill active={Boolean(health)} label={health ? 'Gateway reachable' : 'Gateway unknown'} />
           </div>
@@ -420,7 +531,7 @@ export default function App() {
 
         {isAuthenticated && activeSection === 'services' && (
           <ServicesPage
-            services={filteredServices}
+            services={servicePage.items}
             form={serviceForm}
             setForm={setServiceForm}
             editing={editing.type === 'service'}
@@ -431,13 +542,19 @@ export default function App() {
             onInspect={(service) => inspectRecord('service', service.id)}
             instanceCount={serviceInstanceCount}
             routeCount={routeCount}
+            serviceHealth={serviceHealth}
+            healthLoading={healthLoading}
+            page={servicePage.page}
+            pageSize={PAGE_SIZE}
+            totalItems={filteredServices.length}
+            onPageChange={(page) => changePage('services', page)}
           />
         )}
 
         {isAuthenticated && activeSection === 'instances' && (
           <InstancesPage
             services={services}
-            instances={filteredInstances}
+            instances={instancePage.items}
             form={instanceForm}
             setForm={setInstanceForm}
             editing={editing.type === 'instance'}
@@ -447,13 +564,17 @@ export default function App() {
             onDelete={(instance) => removeRecord('instance', instance.id, `${instance.host}:${instance.port}`)}
             onInspect={(instance) => inspectRecord('instance', instance.id)}
             serviceName={serviceName}
+            page={instancePage.page}
+            pageSize={PAGE_SIZE}
+            totalItems={filteredInstances.length}
+            onPageChange={(page) => changePage('instances', page)}
           />
         )}
 
         {isAuthenticated && activeSection === 'routes' && (
           <RoutesPage
             services={services}
-            routes={filteredRoutes}
+            routes={routePage.items}
             form={routeForm}
             setForm={setRouteForm}
             editing={editing.type === 'route'}
@@ -463,6 +584,18 @@ export default function App() {
             onDelete={(route) => removeRecord('route', route.id, `${route.method} ${route.path}`)}
             onInspect={(route) => inspectRecord('route', route.id)}
             serviceName={serviceName}
+            page={routePage.page}
+            pageSize={PAGE_SIZE}
+            totalItems={filteredRoutes.length}
+            onPageChange={(page) => changePage('routes', page)}
+          />
+        )}
+
+        {isAuthenticated && activeSection === 'api-keys' && (
+          <APIKeysPage
+            api={api}
+            baseUrl={baseUrl}
+            accessToken={accessToken}
           />
         )}
 
@@ -482,6 +615,12 @@ export default function App() {
             instances={instances}
             services={services}
             serviceName={serviceName}
+            serviceHealth={serviceHealth}
+            instanceHealth={instanceHealth}
+            loading={healthLoading}
+            checkingInstanceId={checkingInstanceId}
+            onReload={loadDetailedHealth}
+            onCheckInstance={checkInstanceHealth}
           />
         )}
 
@@ -501,6 +640,10 @@ export default function App() {
             services={services}
             instances={instances}
             routes={routes}
+            cacheStatus={cacheStatus}
+            cacheLoading={cacheLoading}
+            onRefreshCache={loadCacheVersion}
+            onReloadCache={reloadCache}
           />
         )}
 
@@ -524,4 +667,44 @@ export default function App() {
       )}
     </div>
   );
+}
+
+function getInitialSection() {
+  if (!getSavedAccessToken()) return 'login';
+  return sectionFromLocation();
+}
+
+function sectionFromLocation() {
+  const candidate = new URLSearchParams(window.location.search).get('section') || localStorage.getItem(LAST_SECTION_KEY) || 'dashboard';
+  return sections.some((section) => section.id === candidate) && candidate !== 'login' ? candidate : 'dashboard';
+}
+
+function pageFromLocation() {
+  const page = Number.parseInt(new URLSearchParams(window.location.search).get('page') || '1', 10);
+  return Number.isFinite(page) && page > 0 ? page : 1;
+}
+
+function getInitialPages() {
+  const section = sectionFromLocation();
+  return {
+    services: section === 'services' ? pageFromLocation() : 1,
+    instances: section === 'instances' ? pageFromLocation() : 1,
+    routes: section === 'routes' ? pageFromLocation() : 1
+  };
+}
+
+function persistLocation(section, page) {
+  localStorage.setItem(LAST_SECTION_KEY, section);
+  const params = new URLSearchParams(window.location.search);
+  params.set('section', section);
+  if (PAGINATED_SECTIONS.has(section)) params.set('page', String(page));
+  else params.delete('page');
+  window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+}
+
+function pageSlice(items, requestedPage, pageSize) {
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  const page = Math.min(Math.max(requestedPage || 1, 1), totalPages);
+  const start = (page - 1) * pageSize;
+  return { page, items: items.slice(start, start + pageSize) };
 }
