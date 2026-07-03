@@ -66,9 +66,10 @@ export function FormActions({ editing, onCancel }) {
   );
 }
 
-export function RowActions({ onInspect, onEdit, onDelete }) {
+export function RowActions({ onInspect, onEdit, onDelete, children }) {
   return (
     <div className="row-actions">
+      {children}
       <button className="ghost-icon" onClick={onInspect} title="View detail"><Database size={16} /></button>
       <button className="ghost-icon" onClick={onEdit} title="Edit"><Edit3 size={16} /></button>
       <button className="danger-icon" onClick={onDelete} title="Delete"><Trash2 size={16} /></button>

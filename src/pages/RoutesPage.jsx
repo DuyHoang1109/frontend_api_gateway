@@ -1,8 +1,79 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { ShieldCheck, Trash2, X } from 'lucide-react';
 import { EmptyState, Field, FormActions, Pagination, Panel, RowActions, SelectField, StatusPill, Toggle } from '../components/common.jsx';
 
+const defaultCORSForm = {
+  allowed_origins: 'http://localhost:5173',
+  allowed_methods: 'GET',
+  allowed_headers: 'Content-Type\nAuthorization\nX-API-Key',
+  allow_credentials: false,
+  max_age: 3600
+};
+
 export default function RoutesPage(props) {
-  const { services, routes, form, setForm, editing, onSubmit, onCancel, onEdit, onDelete, onInspect, serviceName, page, pageSize, totalItems, onPageChange } = props;
+  const { api, services, routes, form, setForm, editing, onSubmit, onCancel, onEdit, onDelete, onInspect, serviceName, page, pageSize, totalItems, onPageChange } = props;
+  const [corsRoute, setCorsRoute] = useState(null);
+  const [corsForm, setCorsForm] = useState(defaultCORSForm);
+  const [corsExists, setCorsExists] = useState(false);
+  const [corsLoading, setCorsLoading] = useState(false);
+  const [corsMessage, setCorsMessage] = useState('');
+  const [corsError, setCorsError] = useState('');
+
+  async function openCORS(route) {
+    setCorsRoute(route);
+    setCorsLoading(true);
+    setCorsMessage('');
+    setCorsError('');
+    const fallback = corsDefaultsForRoute(route);
+    try {
+      const config = await api.getRouteCORS(route.id);
+      setCorsExists(true);
+      setCorsForm(configToForm(config));
+    } catch (error) {
+      if (error.status === 404) {
+        setCorsExists(false);
+        setCorsForm(fallback);
+      } else {
+        setCorsError(error.message || 'Cannot load CORS config');
+      }
+    } finally {
+      setCorsLoading(false);
+    }
+  }
+
+  async function saveCORS(event) {
+    event.preventDefault();
+    setCorsLoading(true);
+    setCorsMessage('');
+    setCorsError('');
+    try {
+      const config = await api.upsertRouteCORS(corsRoute.id, formToPayload(corsForm));
+      setCorsExists(true);
+      setCorsForm(configToForm(config));
+      setCorsMessage('CORS config saved and gateway cache reload requested');
+    } catch (error) {
+      setCorsError(error.message || 'Cannot save CORS config');
+    } finally {
+      setCorsLoading(false);
+    }
+  }
+
+  async function removeCORS() {
+    if (!window.confirm(`Delete CORS config for ${corsRoute.method} ${corsRoute.path}?`)) return;
+    setCorsLoading(true);
+    setCorsMessage('');
+    setCorsError('');
+    try {
+      await api.deleteRouteCORS(corsRoute.id);
+      setCorsExists(false);
+      setCorsMessage('CORS config deleted and gateway cache reload requested');
+      setCorsForm(corsDefaultsForRoute(corsRoute));
+    } catch (error) {
+      setCorsError(error.message || 'Cannot delete CORS config');
+    } finally {
+      setCorsLoading(false);
+    }
+  }
 
   return (
     <section className="content-stack">
@@ -45,7 +116,11 @@ export default function RoutesPage(props) {
                 <td>{route.auth_required ? 'required' : 'public'}</td>
                 <td>{route.priority}</td>
                 <td><StatusPill active={route.is_active} label={route.is_active ? 'active' : 'inactive'} /></td>
-                <td><RowActions onInspect={() => onInspect(route)} onEdit={() => onEdit(route)} onDelete={() => onDelete(route)} /></td>
+                <td>
+                  <RowActions onInspect={() => onInspect(route)} onEdit={() => onEdit(route)} onDelete={() => onDelete(route)}>
+                    <button className="ghost-icon" type="button" onClick={() => openCORS(route)} title="Configure CORS"><ShieldCheck size={16} /></button>
+                  </RowActions>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -53,6 +128,72 @@ export default function RoutesPage(props) {
         {routes.length === 0 && <EmptyState text="No routes found" />}
         <Pagination page={page} pageSize={pageSize} totalItems={totalItems} onPageChange={onPageChange} />
       </Panel>
+
+      {corsRoute && (
+        <div className="modal-backdrop" onClick={() => setCorsRoute(null)}>
+          <section className="detail-modal cors-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-head">
+              <div>
+                <small>PUT /admin/routes/:id/cors</small>
+                <h2>CORS · {corsRoute.method} {corsRoute.path}</h2>
+              </div>
+              <button className="icon-button" type="button" onClick={() => setCorsRoute(null)} title="Close CORS config"><X size={18} /></button>
+            </div>
+            <form className="form-grid cors-form" onSubmit={saveCORS}>
+              {(corsError || corsMessage) && <div className={`alert field-wide ${corsError ? 'error' : 'success'}`}>{corsError || corsMessage}</div>}
+              <label className="field field-wide">
+                <span>Allowed origins (one per line)</span>
+                <textarea value={corsForm.allowed_origins} onChange={(event) => setCorsForm({ ...corsForm, allowed_origins: event.target.value })} placeholder="http://localhost:5173" required />
+              </label>
+              <label className="field">
+                <span>Allowed methods</span>
+                <textarea value={corsForm.allowed_methods} onChange={(event) => setCorsForm({ ...corsForm, allowed_methods: event.target.value })} placeholder="GET\nPOST" required />
+              </label>
+              <label className="field">
+                <span>Allowed headers</span>
+                <textarea value={corsForm.allowed_headers} onChange={(event) => setCorsForm({ ...corsForm, allowed_headers: event.target.value })} placeholder="Content-Type\nAuthorization" />
+              </label>
+              <Field label="Max age (seconds)" type="number" value={corsForm.max_age} onChange={(value) => setCorsForm({ ...corsForm, max_age: value })} required />
+              <Toggle label="Allow credentials" checked={corsForm.allow_credentials} onChange={(value) => setCorsForm({ ...corsForm, allow_credentials: value })} />
+              <div className="form-actions field-wide">
+                <button className="primary-button" type="submit" disabled={corsLoading}><ShieldCheck size={17} />{corsLoading ? 'Saving...' : corsExists ? 'Update CORS' : 'Create CORS'}</button>
+                {corsExists && <button className="danger-button" type="button" onClick={removeCORS} disabled={corsLoading}><Trash2 size={17} />Delete CORS</button>}
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
     </section>
   );
+}
+
+function splitLines(value) {
+  return value.split(/[\n,]+/).map((item) => item.trim()).filter(Boolean);
+}
+
+function corsDefaultsForRoute(route) {
+  return {
+    ...defaultCORSForm,
+    allowed_methods: route.method === 'ANY' ? 'GET\nPOST\nPUT\nPATCH\nDELETE' : route.method
+  };
+}
+
+function formToPayload(form) {
+  return {
+    allowed_origins: splitLines(form.allowed_origins),
+    allowed_methods: splitLines(form.allowed_methods).map((method) => method.toUpperCase()),
+    allowed_headers: splitLines(form.allowed_headers),
+    allow_credentials: Boolean(form.allow_credentials),
+    max_age: Number(form.max_age)
+  };
+}
+
+function configToForm(config) {
+  return {
+    allowed_origins: (config.allowed_origins || []).join('\n'),
+    allowed_methods: (config.allowed_methods || []).join('\n'),
+    allowed_headers: (config.allowed_headers || []).join('\n'),
+    allow_credentials: Boolean(config.allow_credentials),
+    max_age: config.max_age ?? 3600
+  };
 }

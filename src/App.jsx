@@ -573,6 +573,7 @@ export default function App() {
 
         {isAuthenticated && activeSection === 'routes' && (
           <RoutesPage
+            api={api}
             services={services}
             routes={routePage.items}
             form={routeForm}
