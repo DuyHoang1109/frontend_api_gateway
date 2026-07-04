@@ -26,10 +26,12 @@ import APIKeysPage from './pages/APIKeysPage.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import HealthChecksPage from './pages/HealthChecksPage.jsx';
 import InfoPage from './pages/InfoPage.jsx';
+import IPBlacklistPage from './pages/IPBlacklistPage.jsx';
 import InstancesPage from './pages/InstancesPage.jsx';
 import KongaFeaturePage from './pages/KongaFeaturePage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
+import RateLimitsPage from './pages/RateLimitsPage.jsx';
 import RoutesPage from './pages/RoutesPage.jsx';
 import ServicesPage from './pages/ServicesPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
@@ -598,6 +600,14 @@ export default function App() {
             baseUrl={baseUrl}
             accessToken={accessToken}
           />
+        )}
+
+        {isAuthenticated && activeSection === 'rate-limits' && (
+          <RateLimitsPage api={api} />
+        )}
+
+        {isAuthenticated && activeSection === 'security' && (
+          <IPBlacklistPage api={api} />
         )}
 
         {isAuthenticated && activeSection === 'upstreams' && (

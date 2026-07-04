@@ -4,7 +4,9 @@ import { createAPIKeysApi } from './apiKeysApi.js';
 import { createCacheApi } from './cacheApi.js';
 import { createCORSApi } from './corsApi.js';
 import { createHealthApi } from './healthApi.js';
+import { createIPBlacklistApi } from './ipBlacklistApi.js';
 import { createInstancesApi } from './instancesApi.js';
+import { createRateLimitsApi } from './rateLimitsApi.js';
 import { createRoutesApi } from './routesApi.js';
 import { createServicesApi } from './servicesApi.js';
 
@@ -27,6 +29,8 @@ export function createGatewayAdminApi(baseUrl, accessToken = '', callbacks = {})
     ...createHealthApi(request),
     ...createAuthApi(request),
     ...createAPIKeysApi(request),
+    ...createIPBlacklistApi(request),
+    ...createRateLimitsApi(request),
     ...createCacheApi(request),
     ...createCORSApi(request),
     ...createServicesApi(request),

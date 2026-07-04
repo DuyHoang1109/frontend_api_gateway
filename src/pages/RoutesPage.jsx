@@ -18,6 +18,15 @@ export default function RoutesPage(props) {
   const [corsLoading, setCorsLoading] = useState(false);
   const [corsMessage, setCorsMessage] = useState('');
   const [corsError, setCorsError] = useState('');
+  const [rateLimitPolicies, setRateLimitPolicies] = useState([]);
+
+  React.useEffect(() => {
+    let active = true;
+    api.listRateLimitPolicies()
+      .then((items) => { if (active) setRateLimitPolicies(items); })
+      .catch(() => { if (active) setRateLimitPolicies([]); });
+    return () => { active = false; };
+  }, [api]);
 
   async function openCORS(route) {
     setCorsRoute(route);
@@ -83,7 +92,15 @@ export default function RoutesPage(props) {
           <SelectField label="Method" value={form.method} onChange={(value) => setForm({ ...form, method: value })} options={['GET', 'POST', 'PUT', 'PATCH', 'DELETE']} />
           <SelectField label="Service" value={form.service_id} onChange={(value) => setForm({ ...form, service_id: value })} options={services.map((service) => ({ value: service.id, label: service.name }))} required />
           <Field label="Rewrite target" value={form.rewrite_target || ''} onChange={(value) => setForm({ ...form, rewrite_target: value })} placeholder="/api/products" />
-          <Field label="Rate limit id" value={form.rate_limit_id || ''} onChange={(value) => setForm({ ...form, rate_limit_id: value })} />
+          <SelectField
+            label="Rate limit policy"
+            value={form.rate_limit_id || ''}
+            onChange={(value) => setForm({ ...form, rate_limit_id: value })}
+            options={rateLimitPolicies.map((policy) => ({
+              value: policy.id,
+              label: `${policy.name} (${policy.max_requests}/${policy.window_seconds}s)`
+            }))}
+          />
           <Field label="Priority" type="number" value={form.priority} onChange={(value) => setForm({ ...form, priority: value })} />
           <Toggle label="Strip prefix" checked={form.strip_prefix} onChange={(value) => setForm({ ...form, strip_prefix: value })} />
           <Toggle label="Auth required" checked={form.auth_required} onChange={(value) => setForm({ ...form, auth_required: value })} />

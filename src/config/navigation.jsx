@@ -80,15 +80,15 @@ export const backendFeatureStatus = {
   },
   'rate-limits': {
     title: 'Rate Limits',
-    status: 'missing',
-    endpoints: ['GET /admin/rate-limits', 'POST /admin/rate-limits', 'PUT /admin/rate-limits/:id', 'DELETE /admin/rate-limits/:id'],
-    summary: 'Needed for Redis-backed request limiting by IP/user. UI shell is ready; backend admin API is still needed.'
+    status: 'bound',
+    endpoints: ['POST /admin/rate-limit-policies', 'GET /admin/rate-limit-policies', 'GET /admin/rate-limit-policies/:id', 'PUT /admin/rate-limit-policies/:id', 'DELETE /admin/rate-limit-policies/:id'],
+    summary: 'Rate limit policy CRUD is bound to the Redis-backed gateway limiter.'
   },
   security: {
-    title: 'Security',
-    status: 'missing',
-    endpoints: ['GET /admin/ip-blacklist', 'POST /admin/ip-blacklist', 'DELETE /admin/ip-blacklist/:id'],
-    summary: 'Security can cover JWT/API key policies, IP blacklist, permissions, and auth-required route settings.'
+    title: 'IP Blacklist',
+    status: 'bound',
+    endpoints: ['POST /admin/ip-blacklist', 'GET /admin/ip-blacklist', 'GET /admin/ip-blacklist/:id', 'PUT /admin/ip-blacklist/:id', 'DELETE /admin/ip-blacklist/:id'],
+    summary: 'Manage active or expiring IP/CIDR blocks used by the gateway security middleware.'
   },
   aggregation: {
     title: 'API Aggregation',
@@ -146,4 +146,4 @@ export const backendFeatureStatus = {
   }
 };
 
-export const standaloneFeaturePages = ['info', 'api-keys', 'upstreams', 'healthchecks', 'connections', 'settings'];
+export const standaloneFeaturePages = ['info', 'api-keys', 'rate-limits', 'security', 'upstreams', 'healthchecks', 'connections', 'settings'];
