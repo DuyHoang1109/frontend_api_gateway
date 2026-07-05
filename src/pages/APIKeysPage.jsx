@@ -6,8 +6,8 @@ import { normalizeBaseUrl } from '../api/storage.js';
 const PAGE_SIZE = 5;
 const emptyForm = {
   label: '',
-  user_id: '',
-  scopes: 'GET:/api/orders',
+  client_id: '',
+  permission_ids: '',
   rate_limit_id: '',
   expires_at: '',
   is_active: true
@@ -63,8 +63,8 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
   function payloadFromForm() {
     return {
       label: form.label.trim() || null,
-      user_id: form.user_id.trim() || null,
-      scopes: form.scopes.split(/[\n,]+/).map((scope) => scope.trim()).filter(Boolean),
+      client_id: form.client_id.trim(),
+      permission_ids: splitValues(form.permission_ids),
       rate_limit_id: form.rate_limit_id.trim() || null,
       expires_at: form.expires_at ? new Date(form.expires_at).toISOString() : null,
       is_active: form.is_active
@@ -95,8 +95,8 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
     setEditingId(key.id);
     setForm({
       label: key.label || '',
-      user_id: key.user_id || '',
-      scopes: (key.scopes || []).join('\n'),
+      client_id: key.client_id || '',
+      permission_ids: (key.permission_ids || []).join('\n'),
       rate_limit_id: key.rate_limit_id || '',
       expires_at: toDateTimeLocal(key.expires_at),
       is_active: key.is_active
@@ -194,10 +194,10 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
       <Panel title={editingId ? 'Update API key' : 'Create API key'} eyebrow={editingId ? 'PUT /admin/api-keys/:id' : 'POST /admin/api-keys'}>
         <form className="form-grid" onSubmit={submit}>
           <Field label="Label" value={form.label} onChange={(value) => setForm({ ...form, label: value })} placeholder="order-client" />
-          <Field label="User ID" value={form.user_id} onChange={(value) => setForm({ ...form, user_id: value })} placeholder="Optional UUID" />
+          <Field label="Client ID" value={form.client_id} onChange={(value) => setForm({ ...form, client_id: value })} placeholder="Client UUID" required />
           <Field label="Rate limit ID" value={form.rate_limit_id} onChange={(value) => setForm({ ...form, rate_limit_id: value })} placeholder="Optional UUID" />
           <Field label="Expires at" type="datetime-local" value={form.expires_at} onChange={(value) => setForm({ ...form, expires_at: value })} />
-          <label className="field field-wide"><span>Scopes (one per line)</span><textarea value={form.scopes} onChange={(event) => setForm({ ...form, scopes: event.target.value })} placeholder={'GET:/api/orders\nPOST:/api/order/create'} required /></label>
+          <label className="field field-wide"><span>Permission IDs (one per line)</span><textarea value={form.permission_ids} onChange={(event) => setForm({ ...form, permission_ids: event.target.value })} placeholder={'Permission UUID\nPermission UUID'} required /></label>
           <Toggle label="Active" checked={form.is_active} onChange={(value) => setForm({ ...form, is_active: value })} />
           <div className="form-actions">
             <button className="primary-button" type="submit"><KeyRound size={17} />{editingId ? 'Update' : 'Create'}</button>
@@ -208,18 +208,21 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
 
       <Panel title="API keys" eyebrow="GET /admin/api-keys">
         <div className="table-toolbar">
-          <input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search label, prefix, scope..." />
+          <input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search label, prefix, client or permission..." />
           <button className="icon-button" type="button" onClick={loadKeys} title="Reload API keys"><RefreshCw className={loading ? 'spin' : ''} size={17} /></button>
         </div>
         <table className="data-table api-key-table">
-          <thead><tr><th>Key</th><th>Scopes</th><th>Expiry</th><th>Last used</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Key</th><th>Client / permissions</th><th>Expiry</th><th>Last used</th><th>Status</th><th></th></tr></thead>
           <tbody>{visibleKeys.map((key) => (
             <tr key={key.id}>
               <td><strong>{key.label || 'Unlabelled key'}</strong><small>{key.key_prefix}...</small></td>
-              <td><div className="scope-list">{(key.scopes || []).map((scope) => <code key={scope}>{scope}</code>)}</div></td>
+              <td>
+                <small>{key.client_id || '-'}</small>
+                <div className="scope-list">{(key.permission_ids || []).map((permissionId) => <code key={permissionId}>{permissionId}</code>)}</div>
+              </td>
               <td>{formatDate(key.expires_at)}</td>
               <td>{formatDate(key.last_used_at)}</td>
-              <td><StatusPill active={key.is_active} label={key.is_active ? 'active' : 'revoked'} /></td>
+              <td><StatusPill active={key.is_active && !key.revoked_at} label={key.revoked_at ? 'revoked' : key.is_active ? 'active' : 'inactive'} /></td>
               <td><div className="row-actions">
                 <button className="ghost-icon" type="button" onClick={() => inspect(key)} title="View detail"><Database size={16} /></button>
                 <button className="ghost-icon" type="button" onClick={() => startEdit(key)} title="Edit"><Edit3 size={16} /></button>
@@ -253,6 +256,10 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
 function normalizePath(path) {
   const value = path.trim();
   return value.startsWith('/') ? value : `/${value}`;
+}
+
+function splitValues(value) {
+  return value.split(/[\n,]+/).map((item) => item.trim()).filter(Boolean);
 }
 
 function toDateTimeLocal(value) {

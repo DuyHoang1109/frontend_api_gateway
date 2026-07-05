@@ -1288,6 +1288,14 @@ button.feature-card:hover {
   min-height: 112px;
 }
 
+.cors-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .danger-button {
   display: inline-flex;
   align-items: center;

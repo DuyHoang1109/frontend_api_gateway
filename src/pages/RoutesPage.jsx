@@ -7,7 +7,10 @@ const defaultCORSForm = {
   allowed_methods: 'GET',
   allowed_headers: 'Content-Type\nAuthorization\nX-API-Key',
   allow_credentials: false,
-  max_age: 3600
+  max_age: 3600,
+  is_active: true,
+  created_at: '',
+  updated_at: ''
 };
 
 export default function RoutesPage(props) {
@@ -172,6 +175,13 @@ export default function RoutesPage(props) {
               </label>
               <Field label="Max age (seconds)" type="number" value={corsForm.max_age} onChange={(value) => setCorsForm({ ...corsForm, max_age: value })} required />
               <Toggle label="Allow credentials" checked={corsForm.allow_credentials} onChange={(value) => setCorsForm({ ...corsForm, allow_credentials: value })} />
+              <Toggle label="Active" checked={corsForm.is_active} onChange={(value) => setCorsForm({ ...corsForm, is_active: value })} />
+              {corsExists && (
+                <div className="cors-meta field-wide">
+                  <span>Created: {formatDate(corsForm.created_at)}</span>
+                  <span>Updated: {formatDate(corsForm.updated_at)}</span>
+                </div>
+              )}
               <div className="form-actions field-wide">
                 <button className="primary-button" type="submit" disabled={corsLoading}><ShieldCheck size={17} />{corsLoading ? 'Saving...' : corsExists ? 'Update CORS' : 'Create CORS'}</button>
                 {corsExists && <button className="danger-button" type="button" onClick={removeCORS} disabled={corsLoading}><Trash2 size={17} />Delete CORS</button>}
@@ -201,7 +211,8 @@ function formToPayload(form) {
     allowed_methods: splitLines(form.allowed_methods).map((method) => method.toUpperCase()),
     allowed_headers: splitLines(form.allowed_headers),
     allow_credentials: Boolean(form.allow_credentials),
-    max_age: Number(form.max_age)
+    max_age: Number(form.max_age),
+    is_active: Boolean(form.is_active)
   };
 }
 
@@ -211,6 +222,13 @@ function configToForm(config) {
     allowed_methods: (config.allowed_methods || []).join('\n'),
     allowed_headers: (config.allowed_headers || []).join('\n'),
     allow_credentials: Boolean(config.allow_credentials),
-    max_age: config.max_age ?? 3600
+    max_age: config.max_age ?? 3600,
+    is_active: config.is_active !== false,
+    created_at: config.created_at || '',
+    updated_at: config.updated_at || ''
   };
+}
+
+function formatDate(value) {
+  return value ? new Date(value).toLocaleString() : '-';
 }
