@@ -7,7 +7,7 @@ const PAGE_SIZE = 5;
 const emptyForm = {
   label: '',
   client_id: '',
-  permission_ids: '',
+  permission_ids: [],
   rate_limit_id: '',
   expires_at: '',
   is_active: true
@@ -15,11 +15,13 @@ const emptyForm = {
 
 export default function APIKeysPage({ api, baseUrl, accessToken }) {
   const [keys, setKeys] = useState([]);
+  const [options, setOptions] = useState({ clients: [], permissions: [], rate_limits: [] });
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState('');
   const [createdKey, setCreatedKey] = useState('');
   const [selected, setSelected] = useState(null);
   const [search, setSearch] = useState('');
+  const [permissionQuery, setPermissionQuery] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -36,6 +38,7 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
 
   useEffect(() => {
     loadKeys();
+    loadOptions();
   }, [api]);
 
   const filteredKeys = useMemo(() => {
@@ -47,6 +50,15 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
   const totalPages = Math.max(1, Math.ceil(filteredKeys.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const visibleKeys = filteredKeys.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const filteredPermissions = useMemo(() => {
+    const query = permissionQuery.trim().toLowerCase();
+    if (!query) return options.permissions;
+    return options.permissions.filter((permission) => permission.name.toLowerCase().includes(query));
+  }, [options.permissions, permissionQuery]);
+  const selectedPermissions = useMemo(
+    () => options.permissions.filter((permission) => form.permission_ids.includes(permission.id)),
+    [options.permissions, form.permission_ids]
+  );
 
   async function loadKeys() {
     setLoading(true);
@@ -60,11 +72,19 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
     }
   }
 
+  async function loadOptions() {
+    try {
+      setOptions(await api.getAPIKeyOptions());
+    } catch (err) {
+      setError(err.message || 'Cannot load API key options');
+    }
+  }
+
   function payloadFromForm() {
     return {
       label: form.label.trim() || null,
       client_id: form.client_id.trim(),
-      permission_ids: splitValues(form.permission_ids),
+      permission_ids: form.permission_ids,
       rate_limit_id: form.rate_limit_id.trim() || null,
       expires_at: form.expires_at ? new Date(form.expires_at).toISOString() : null,
       is_active: form.is_active
@@ -74,6 +94,14 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
   async function submit(event) {
     event.preventDefault();
     setError('');
+    if (!form.client_id) {
+      setError('Choose a client');
+      return;
+    }
+    if (form.permission_ids.length === 0) {
+      setError('Choose at least one permission');
+      return;
+    }
     try {
       if (editingId) {
         await api.updateAPIKey(editingId, payloadFromForm());
@@ -93,10 +121,11 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
 
   function startEdit(key) {
     setEditingId(key.id);
+    setPermissionQuery('');
     setForm({
       label: key.label || '',
       client_id: key.client_id || '',
-      permission_ids: (key.permission_ids || []).join('\n'),
+      permission_ids: (key.permissions || []).map((permission) => permission.id),
       rate_limit_id: key.rate_limit_id || '',
       expires_at: toDateTimeLocal(key.expires_at),
       is_active: key.is_active
@@ -107,6 +136,20 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
   function resetForm() {
     setEditingId('');
     setForm(emptyForm);
+    setPermissionQuery('');
+  }
+
+  function togglePermission(permissionId) {
+    setForm((current) => ({
+      ...current,
+      permission_ids: current.permission_ids.includes(permissionId)
+        ? current.permission_ids.filter((id) => id !== permissionId)
+        : [...current.permission_ids, permissionId]
+    }));
+  }
+
+  function clientName(clientId) {
+    return options.clients.find((client) => client.id === clientId)?.name || clientId || '-';
   }
 
   async function inspect(key) {
@@ -194,10 +237,38 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
       <Panel title={editingId ? 'Update API key' : 'Create API key'} eyebrow={editingId ? 'PUT /admin/api-keys/:id' : 'POST /admin/api-keys'}>
         <form className="form-grid" onSubmit={submit}>
           <Field label="Label" value={form.label} onChange={(value) => setForm({ ...form, label: value })} placeholder="order-client" />
-          <Field label="Client ID" value={form.client_id} onChange={(value) => setForm({ ...form, client_id: value })} placeholder="Client UUID" required />
-          <Field label="Rate limit ID" value={form.rate_limit_id} onChange={(value) => setForm({ ...form, rate_limit_id: value })} placeholder="Optional UUID" />
+          <SelectField label="Client" value={form.client_id} onChange={(value) => setForm({ ...form, client_id: value })} options={options.clients.map((client) => ({ value: client.id, label: client.name }))} required />
+          <SelectField label="Rate limit" value={form.rate_limit_id} onChange={(value) => setForm({ ...form, rate_limit_id: value })} options={options.rate_limits.map((policy) => ({ value: policy.id, label: policy.name }))} />
           <Field label="Expires at" type="datetime-local" value={form.expires_at} onChange={(value) => setForm({ ...form, expires_at: value })} />
-          <label className="field field-wide"><span>Permission IDs (one per line)</span><textarea value={form.permission_ids} onChange={(event) => setForm({ ...form, permission_ids: event.target.value })} placeholder={'Permission UUID\nPermission UUID'} required /></label>
+          <fieldset className="field permission-picker field-wide">
+            <legend>Permissions</legend>
+            <input
+              className="permission-search"
+              type="search"
+              value={permissionQuery}
+              onChange={(event) => setPermissionQuery(event.target.value)}
+              placeholder="Search resource or action, e.g. services or read"
+            />
+            {selectedPermissions.length > 0 && (
+              <div className="selected-permissions" aria-label="Selected permissions">
+                {selectedPermissions.map((permission) => (
+                  <button key={permission.id} type="button" onClick={() => togglePermission(permission.id)} title={`Remove ${permission.name}`}>
+                    <code>{permission.name}</code><X size={12} />
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="permission-options">
+              {filteredPermissions.map((permission) => (
+                <label key={permission.id}>
+                  <input type="checkbox" checked={form.permission_ids.includes(permission.id)} onChange={() => togglePermission(permission.id)} />
+                  <code>{permission.name}</code>
+                </label>
+              ))}
+              {options.permissions.length === 0 && <small>No active permissions available</small>}
+              {options.permissions.length > 0 && filteredPermissions.length === 0 && <small>No permissions match “{permissionQuery}”</small>}
+            </div>
+          </fieldset>
           <Toggle label="Active" checked={form.is_active} onChange={(value) => setForm({ ...form, is_active: value })} />
           <div className="form-actions">
             <button className="primary-button" type="submit"><KeyRound size={17} />{editingId ? 'Update' : 'Create'}</button>
@@ -217,12 +288,12 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
             <tr key={key.id}>
               <td><strong>{key.label || 'Unlabelled key'}</strong><small>{key.key_prefix}...</small></td>
               <td>
-                <small>{key.client_id || '-'}</small>
-                <div className="scope-list">{(key.permission_ids || []).map((permissionId) => <code key={permissionId}>{permissionId}</code>)}</div>
+                <small>{clientName(key.client_id)}</small>
+                <div className="scope-list">{(key.permissions || []).map((permission) => <code key={permission.id}>{permission.name}</code>)}</div>
               </td>
               <td>{formatDate(key.expires_at)}</td>
               <td>{formatDate(key.last_used_at)}</td>
-              <td><StatusPill active={key.is_active && !key.revoked_at} label={key.revoked_at ? 'revoked' : key.is_active ? 'active' : 'inactive'} /></td>
+              <td><StatusPill active={isUsable(key)} label={key.revoked_at ? 'revoked' : isExpired(key) ? 'expired' : key.is_active ? 'active' : 'inactive'} /></td>
               <td><div className="row-actions">
                 <button className="ghost-icon" type="button" onClick={() => inspect(key)} title="View detail"><Database size={16} /></button>
                 <button className="ghost-icon" type="button" onClick={() => startEdit(key)} title="Edit"><Edit3 size={16} /></button>
@@ -258,15 +329,19 @@ function normalizePath(path) {
   return value.startsWith('/') ? value : `/${value}`;
 }
 
-function splitValues(value) {
-  return value.split(/[\n,]+/).map((item) => item.trim()).filter(Boolean);
-}
-
 function toDateTimeLocal(value) {
   if (!value) return '';
   const date = new Date(value);
   const offset = date.getTimezoneOffset() * 60000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function isExpired(key) {
+  return Boolean(key.expires_at && new Date(key.expires_at) <= new Date());
+}
+
+function isUsable(key) {
+  return Boolean(key.is_active && !key.revoked_at && !isExpired(key));
 }
 
 function formatDate(value) {

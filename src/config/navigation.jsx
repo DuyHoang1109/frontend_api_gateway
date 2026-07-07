@@ -16,6 +16,7 @@ import {
   Server,
   Settings,
   Shield,
+  ShieldCheck,
   SlidersHorizontal,
   TerminalSquare,
   UserCircle,
@@ -32,6 +33,8 @@ export const sections = [
   { id: 'routes', label: 'Routes', icon: GitFork },
   { id: 'plugins', label: 'Plugins', icon: PlugZap },
   { id: 'consumers', label: 'Consumers', icon: Users },
+  { id: 'roles', label: 'Roles', icon: ShieldCheck },
+  { id: 'permissions', label: 'Permissions', icon: ListChecks },
   { id: 'api-keys', label: 'API Keys', icon: KeyRound },
   { id: 'rate-limits', label: 'Rate Limits', icon: SlidersHorizontal },
   { id: 'security', label: 'Security', icon: Shield },
@@ -64,6 +67,18 @@ export const backendFeatureStatus = {
     status: 'missing',
     endpoints: ['GET /admin/consumers', 'POST /admin/consumers', 'PUT /admin/consumers/:id', 'DELETE /admin/consumers/:id'],
     summary: 'Konga has consumer management. GW_v1 currently does not expose consumer/user-facing admin endpoints.'
+  },
+  roles: {
+    title: 'Roles',
+    status: 'bound',
+    endpoints: ['GET /admin/roles', 'GET /admin/roles/:id', 'GET /admin/roles/:id/permissions'],
+    summary: 'List roles, inspect role details, and view permissions assigned to each role.'
+  },
+  permissions: {
+    title: 'Permissions',
+    status: 'bound',
+    endpoints: ['GET /admin/permissions', 'GET /admin/permissions/:id'],
+    summary: 'List and inspect permissions by resource and action.'
   },
   'api-keys': {
     title: 'API Keys',
@@ -146,4 +161,4 @@ export const backendFeatureStatus = {
   }
 };
 
-export const standaloneFeaturePages = ['info', 'api-keys', 'rate-limits', 'security', 'upstreams', 'healthchecks', 'connections', 'settings'];
+export const standaloneFeaturePages = ['info', 'roles', 'permissions', 'api-keys', 'rate-limits', 'security', 'upstreams', 'healthchecks', 'connections', 'settings'];

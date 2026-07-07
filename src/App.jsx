@@ -31,7 +31,9 @@ import InstancesPage from './pages/InstancesPage.jsx';
 import KongaFeaturePage from './pages/KongaFeaturePage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
+import PermissionsPage from './pages/PermissionsPage.jsx';
 import RateLimitsPage from './pages/RateLimitsPage.jsx';
+import RolesPage from './pages/RolesPage.jsx';
 import RoutesPage from './pages/RoutesPage.jsx';
 import ServicesPage from './pages/ServicesPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
@@ -600,6 +602,14 @@ export default function App() {
             baseUrl={baseUrl}
             accessToken={accessToken}
           />
+        )}
+
+        {isAuthenticated && activeSection === 'roles' && (
+          <RolesPage api={api} />
+        )}
+
+        {isAuthenticated && activeSection === 'permissions' && (
+          <PermissionsPage api={api} />
         )}
 
         {isAuthenticated && activeSection === 'rate-limits' && (

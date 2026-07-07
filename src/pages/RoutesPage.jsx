@@ -2,10 +2,24 @@ import React, { useState } from 'react';
 import { ShieldCheck, Trash2, X } from 'lucide-react';
 import { EmptyState, Field, FormActions, Pagination, Panel, RowActions, SelectField, StatusPill, Toggle } from '../components/common.jsx';
 
+const HTTP_METHOD_OPTIONS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
+const HEADER_OPTIONS = [
+  'Accept',
+  'Accept-Language',
+  'Authorization',
+  'Cache-Control',
+  'Content-Language',
+  'Content-Type',
+  'Origin',
+  'X-API-Key',
+  'X-Correlation-ID',
+  'X-Requested-With'
+];
+
 const defaultCORSForm = {
   allowed_origins: 'http://localhost:5173',
   allowed_methods: 'GET',
-  allowed_headers: 'Content-Type\nAuthorization\nX-API-Key',
+  allowed_headers: ['Content-Type', 'Authorization', 'X-API-Key'],
   allow_credentials: false,
   max_age: 3600,
   is_active: true,
@@ -21,6 +35,7 @@ export default function RoutesPage(props) {
   const [corsLoading, setCorsLoading] = useState(false);
   const [corsMessage, setCorsMessage] = useState('');
   const [corsError, setCorsError] = useState('');
+  const [corsHeaderQuery, setCorsHeaderQuery] = useState('');
   const [rateLimitPolicies, setRateLimitPolicies] = useState([]);
 
   React.useEffect(() => {
@@ -36,6 +51,7 @@ export default function RoutesPage(props) {
     setCorsLoading(true);
     setCorsMessage('');
     setCorsError('');
+    setCorsHeaderQuery('');
     const fallback = corsDefaultsForRoute(route);
     try {
       const config = await api.getRouteCORS(route.id);
@@ -85,6 +101,15 @@ export default function RoutesPage(props) {
     } finally {
       setCorsLoading(false);
     }
+  }
+
+  function toggleCORSHeader(header) {
+    setCorsForm((current) => ({
+      ...current,
+      allowed_headers: current.allowed_headers.includes(header)
+        ? current.allowed_headers.filter((item) => item !== header)
+        : [...current.allowed_headers, header]
+    }));
   }
 
   return (
@@ -161,21 +186,56 @@ export default function RoutesPage(props) {
             </div>
             <form className="form-grid cors-form" onSubmit={saveCORS}>
               {(corsError || corsMessage) && <div className={`alert field-wide ${corsError ? 'error' : 'success'}`}>{corsError || corsMessage}</div>}
-              <label className="field field-wide">
-                <span>Allowed origins (one per line)</span>
-                <textarea value={corsForm.allowed_origins} onChange={(event) => setCorsForm({ ...corsForm, allowed_origins: event.target.value })} placeholder="http://localhost:5173" required />
-              </label>
-              <label className="field">
-                <span>Allowed methods</span>
-                <textarea value={corsForm.allowed_methods} onChange={(event) => setCorsForm({ ...corsForm, allowed_methods: event.target.value })} placeholder="GET\nPOST" required />
-              </label>
-              <label className="field">
-                <span>Allowed headers</span>
-                <textarea value={corsForm.allowed_headers} onChange={(event) => setCorsForm({ ...corsForm, allowed_headers: event.target.value })} placeholder="Content-Type\nAuthorization" />
-              </label>
+              <div className="cors-left-column">
+                <label className="field cors-origins">
+                  <span>Allowed origins (one per line)</span>
+                  <textarea value={corsForm.allowed_origins} onChange={(event) => setCorsForm({ ...corsForm, allowed_origins: event.target.value })} placeholder="http://localhost:5173" required />
+                </label>
+                <SelectField
+                  label="Allowed method"
+                  value={corsForm.allowed_methods}
+                  onChange={(value) => setCorsForm({ ...corsForm, allowed_methods: value })}
+                  options={HTTP_METHOD_OPTIONS}
+                  required
+                />
+              </div>
+              <fieldset className="field cors-header-picker">
+                <legend>Allowed headers</legend>
+                <input
+                  className="cors-header-search"
+                  type="search"
+                  value={corsHeaderQuery}
+                  onChange={(event) => setCorsHeaderQuery(event.target.value)}
+                  placeholder="Search header, e.g. Content-Type or X-API-Key"
+                />
+                {corsForm.allowed_headers.length > 0 && (
+                  <div className="cors-selected-headers" aria-label="Selected headers">
+                    {corsForm.allowed_headers.map((header) => (
+                      <button key={header} type="button" onClick={() => toggleCORSHeader(header)} title={`Remove ${header}`}>
+                        <code>{header}</code><X size={12} />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="cors-header-options">
+                  {filteredHeadersFor(corsForm.allowed_headers, corsHeaderQuery).map((header) => (
+                    <label key={header}>
+                      <input
+                        type="checkbox"
+                        checked={corsForm.allowed_headers.includes(header)}
+                        onChange={() => toggleCORSHeader(header)}
+                      />
+                      <code>{header}</code>
+                    </label>
+                  ))}
+                  {filteredHeadersFor(corsForm.allowed_headers, corsHeaderQuery).length === 0 && <small>No headers match “{corsHeaderQuery}”</small>}
+                </div>
+              </fieldset>
               <Field label="Max age (seconds)" type="number" value={corsForm.max_age} onChange={(value) => setCorsForm({ ...corsForm, max_age: value })} required />
-              <Toggle label="Allow credentials" checked={corsForm.allow_credentials} onChange={(value) => setCorsForm({ ...corsForm, allow_credentials: value })} />
-              <Toggle label="Active" checked={corsForm.is_active} onChange={(value) => setCorsForm({ ...corsForm, is_active: value })} />
+              <div className="cors-toggles">
+                <Toggle label="Allow credentials" checked={corsForm.allow_credentials} onChange={(value) => setCorsForm({ ...corsForm, allow_credentials: value })} />
+                <Toggle label="Active" checked={corsForm.is_active} onChange={(value) => setCorsForm({ ...corsForm, is_active: value })} />
+              </div>
               {corsExists && (
                 <div className="cors-meta field-wide">
                   <span>Created: {formatDate(corsForm.created_at)}</span>
@@ -201,15 +261,16 @@ function splitLines(value) {
 function corsDefaultsForRoute(route) {
   return {
     ...defaultCORSForm,
-    allowed_methods: route.method === 'ANY' ? 'GET\nPOST\nPUT\nPATCH\nDELETE' : route.method
+    allowed_headers: [...defaultCORSForm.allowed_headers],
+    allowed_methods: HTTP_METHOD_OPTIONS.includes(route.method) ? route.method : 'GET'
   };
 }
 
 function formToPayload(form) {
   return {
     allowed_origins: splitLines(form.allowed_origins),
-    allowed_methods: splitLines(form.allowed_methods).map((method) => method.toUpperCase()),
-    allowed_headers: splitLines(form.allowed_headers),
+    allowed_methods: [form.allowed_methods],
+    allowed_headers: form.allowed_headers,
     allow_credentials: Boolean(form.allow_credentials),
     max_age: Number(form.max_age),
     is_active: Boolean(form.is_active)
@@ -219,14 +280,24 @@ function formToPayload(form) {
 function configToForm(config) {
   return {
     allowed_origins: (config.allowed_origins || []).join('\n'),
-    allowed_methods: (config.allowed_methods || []).join('\n'),
-    allowed_headers: (config.allowed_headers || []).join('\n'),
+    allowed_methods: (config.allowed_methods || [])[0] || 'GET',
+    allowed_headers: [...(config.allowed_headers || [])],
     allow_credentials: Boolean(config.allow_credentials),
     max_age: config.max_age ?? 3600,
     is_active: config.is_active !== false,
     created_at: config.created_at || '',
     updated_at: config.updated_at || ''
   };
+}
+
+function headerOptionsFor(selectedHeaders) {
+  return [...new Set([...HEADER_OPTIONS, ...selectedHeaders])];
+}
+
+function filteredHeadersFor(selectedHeaders, query) {
+  const normalizedQuery = query.trim().toLowerCase();
+  const options = headerOptionsFor(selectedHeaders);
+  return normalizedQuery ? options.filter((header) => header.toLowerCase().includes(normalizedQuery)) : options;
 }
 
 function formatDate(value) {
