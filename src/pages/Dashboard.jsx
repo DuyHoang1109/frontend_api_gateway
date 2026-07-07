@@ -1,22 +1,149 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Activity, AlertCircle, Cloud, Download, Filter, Gauge, GitFork, Globe2, LayoutDashboard, RefreshCcw, ShieldCheck, Server } from 'lucide-react';
 import { backendFeatureStatus, sections } from '../config/navigation.jsx';
 import { EmptyState, Metric } from '../components/common.jsx';
 
-export default function Dashboard({ services, instances, routes, health, ready, onNavigate }) {
+export default function Dashboard({ api, services, instances, routes, health, ready, onNavigate }) {
+  const [snapshot, setSnapshot] = useState(null);
+  const [requestLogs, setRequestLogs] = useState([]);
+  const [streamStatus, setStreamStatus] = useState('connecting');
+  const [streamError, setStreamError] = useState('');
+
   const activeServices = services.filter((item) => item.is_active).length;
   const activeInstances = instances.filter((item) => item.is_active).length;
   const activeRoutes = routes.filter((item) => item.is_active).length;
   const missingFeatureCount = Object.values(backendFeatureStatus).filter((feature) => feature.status === 'missing').length;
   const systemHealth = health && ready ? '99.9%' : health ? '75.0%' : '0%';
-  const recentLogs = buildRecentLogs(routes);
+  const recentLogs = requestLogs.length > 0 ? normalizeLogs(requestLogs) : buildRecentLogs(routes);
+  const summary = snapshot?.summary || {};
+  const rps = Array.isArray(snapshot?.rps) ? snapshot.rps : [];
+
+  useEffect(() => {
+    if (!api?.streamRealtimeMetrics && !api?.getRealtimeSnapshot) return undefined;
+
+    let retryTimer = null;
+    let pollTimer = null;
+    let stopped = false;
+    let controller = null;
+    const realtimeParams = { window: '60s', interval: '1s', top_limit: 10 };
+
+    const pollSnapshot = async () => {
+      if (stopped || !api?.getRealtimeSnapshot) return;
+      try {
+        const payload = await api.getRealtimeSnapshot(realtimeParams);
+        if (!stopped) {
+          setSnapshot(payload);
+          setStreamStatus((current) => current === 'connected' ? current : 'polling');
+          setStreamError('');
+        }
+      } catch (error) {
+        if (!stopped) {
+          setStreamStatus('disconnected');
+          setStreamError(error.message || 'Cannot load metrics');
+        }
+      }
+    };
+
+    const startPolling = () => {
+      if (pollTimer || !api?.getRealtimeSnapshot) return;
+      pollSnapshot();
+      pollTimer = window.setInterval(pollSnapshot, 2000);
+    };
+
+    const stopPolling = () => {
+      if (pollTimer) {
+        window.clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    };
+
+    const connect = () => {
+      if (stopped) return;
+      if (!api?.streamRealtimeMetrics) {
+        startPolling();
+        return;
+      }
+      controller = new AbortController();
+      setStreamStatus('connecting');
+
+      api.streamRealtimeMetrics(
+        realtimeParams,
+        {
+          signal: controller.signal,
+          onOpen: () => {
+            stopPolling();
+            setStreamStatus('connected');
+            setStreamError('');
+          },
+          onMetrics: (payload) => {
+            if (payload && typeof payload === 'object') {
+              setSnapshot(payload);
+            }
+            setStreamStatus('connected');
+            setStreamError('');
+          },
+          onError: (payload) => {
+            setStreamStatus('degraded');
+            setStreamError(payload?.message || 'Realtime stream degraded');
+            startPolling();
+          }
+        }
+      ).catch((error) => {
+        if (stopped || error.name === 'AbortError') return;
+        setStreamStatus('disconnected');
+        setStreamError(error.message || 'Realtime stream disconnected');
+        startPolling();
+        retryTimer = window.setTimeout(connect, 3000);
+      });
+    };
+
+    connect();
+
+    return () => {
+      stopped = true;
+      if (retryTimer) window.clearTimeout(retryTimer);
+      stopPolling();
+      if (controller) controller.abort();
+    };
+  }, [api]);
+
+  useEffect(() => {
+    let ignore = false;
+    if (!api?.getLogs) return undefined;
+
+    const loadRecentLogs = () => {
+      api.getLogs({ page: 1, limit: 5, sort: '@timestamp:desc' })
+        .then((items) => {
+          if (!ignore) setRequestLogs(items);
+        })
+        .catch(() => {
+          if (!ignore) setRequestLogs([]);
+        });
+    };
+
+    loadRecentLogs();
+    const timer = window.setInterval(loadRecentLogs, 10000);
+
+    return () => {
+      ignore = true;
+      window.clearInterval(timer);
+    };
+  }, [api]);
+
+  const streamDetail = useMemo(() => {
+    if (streamStatus === 'connected') return 'SSE connected';
+    if (streamStatus === 'polling') return 'Polling metrics';
+    if (streamStatus === 'degraded') return 'Elasticsearch retrying';
+    if (streamStatus === 'disconnected') return 'Reconnecting';
+    return 'Connecting';
+  }, [streamStatus]);
 
   return (
     <section className="dashboard-stack">
       <div className="dashboard-kpi-grid">
-        <KpiCard title="Total Requests" subtitle="24h" value="4.2M" trend="+12.5%" trendTone="up" note="vs yesterday" icon={Globe2} />
-        <KpiCard title="Avg Latency" value="120" unit="ms" trend="+5ms" trendTone="down" note="vs yesterday" icon={Gauge} />
-        <KpiCard title="Error Rate" value="0.02%" trend="-0.01%" trendTone="up" note="vs yesterday" icon={AlertCircle} />
+        <KpiCard title="Total Requests" subtitle="60s" value={formatNumber(summary.total_requests)} trend={streamDetail} trendTone={streamStatus === 'connected' || streamStatus === 'polling' ? 'up' : 'down'} note={streamError} icon={Globe2} />
+        <KpiCard title="Avg Latency" value={formatLatency(summary.avg_latency_ms)} unit="ms" trend={`p95 ${formatLatency(summary.p95_latency_ms)}ms`} trendTone={Number(summary.p95_latency_ms || 0) > 500 ? 'down' : 'up'} icon={Gauge} />
+        <KpiCard title="Error Rate" value={formatPercent(summary.error_rate)} trend={`${formatNumber(summary.error_count)} errors`} trendTone={Number(summary.error_rate || 0) > 0.05 ? 'down' : 'up'} icon={AlertCircle} />
         <KpiCard title="System Health" value={systemHealth} trend={health ? 'All systems operational' : 'Gateway unavailable'} trendTone={health ? 'up' : 'down'} icon={ShieldCheck} />
       </div>
 
@@ -37,7 +164,7 @@ export default function Dashboard({ services, instances, routes, health, ready, 
             </div>
             <button className="tiny-button">Last 24 Hours</button>
           </div>
-          <TrafficChart />
+          <TrafficChart data={rps} />
         </section>
 
         <section className="panel discovery-panel">
@@ -93,8 +220,8 @@ export default function Dashboard({ services, instances, routes, health, ready, 
               </tr>
             </thead>
             <tbody>
-              {recentLogs.map((log) => (
-                <tr key={`${log.path}-${log.timestamp}`}>
+              {recentLogs.map((log, index) => (
+                <tr key={log.traceId || `${log.path}-${log.timestamp}-${index}`}>
                   <td>{log.timestamp}</td>
                   <td><span className={`method-badge ${log.method.toLowerCase()}`}>{log.method}</span></td>
                   <td><code className="path-code">{log.path}</code></td>
@@ -153,14 +280,21 @@ function KpiCard({ title, subtitle, value, unit, trend, trendTone, note, icon: I
   );
 }
 
-function TrafficChart() {
+function TrafficChart({ data = [] }) {
+  const safeData = Array.isArray(data) ? data : [];
+  const points = chartPoints(safeData);
+  const linePath = pointsToLinePath(points);
+  const areaPath = `${linePath} L640 250 L0 250 Z`;
+  const maxRequests = Math.max(...safeData.map((item) => Number(item.requests || 0)), 1);
+  const labels = chartLabels(safeData);
+
   return (
     <div className="traffic-chart">
       <div className="chart-axis">
-        <span>4k</span>
-        <span>3k</span>
-        <span>2k</span>
-        <span>1k</span>
+        <span>{formatCompact(maxRequests)}</span>
+        <span>{formatCompact(maxRequests * 0.66)}</span>
+        <span>{formatCompact(maxRequests * 0.33)}</span>
+        <span>0</span>
       </div>
       <svg viewBox="0 0 640 250" role="img" aria-label="Real time traffic chart">
         <defs>
@@ -169,17 +303,79 @@ function TrafficChart() {
             <stop offset="100%" stopColor="#2f80ed" stopOpacity="0.03" />
           </linearGradient>
         </defs>
-        <path className="traffic-area" d="M0 210 C50 185 100 190 150 185 C210 175 230 110 285 70 C345 30 400 110 455 100 C510 90 510 40 575 55 C615 65 625 110 640 130 L640 250 L0 250 Z" />
-        <path className="traffic-line" d="M0 210 C50 185 100 190 150 185 C210 175 230 110 285 70 C345 30 400 110 455 100 C510 90 510 40 575 55 C615 65 625 110 640 130" />
+        <path className="traffic-area" d={areaPath} />
+        <path className="traffic-line" d={linePath} />
       </svg>
       <div className="chart-time">
-        <span>00:00</span>
-        <span>08:00</span>
-        <span>12:00</span>
-        <span>18:00</span>
+        {labels.map((label) => <span key={label}>{label}</span>)}
       </div>
     </div>
   );
+}
+
+function normalizeLogs(logs) {
+  return (Array.isArray(logs) ? logs : []).slice(0, 5).map((log) => ({
+    traceId: log.trace_id,
+    timestamp: formatTimestamp(log['@timestamp']),
+    method: log.method || '-',
+    path: log.path || log.normalized_path || '-',
+    status: log.status_code || 0,
+    latency: Math.round(Number(log.response_time_ms || 0))
+  }));
+}
+
+function formatTimestamp(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
+}
+
+function formatNumber(value) {
+  const number = Number(value || 0);
+  return new Intl.NumberFormat('en-US', { notation: number >= 100000 ? 'compact' : 'standard', maximumFractionDigits: 1 }).format(number);
+}
+
+function formatCompact(value) {
+  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(Math.round(Number(value || 0)));
+}
+
+function formatLatency(value) {
+  return String(Math.round(Number(value || 0)));
+}
+
+function formatPercent(value) {
+  return `${(Number(value || 0) * 100).toFixed(2)}%`;
+}
+
+function chartPoints(data) {
+  const values = data.length > 0 ? data : Array.from({ length: 12 }, () => ({ requests: 0 }));
+  const max = Math.max(...values.map((item) => Number(item.requests || 0)), 1);
+  return values.map((item, index) => {
+    const x = values.length === 1 ? 0 : (index / (values.length - 1)) * 640;
+    const y = 220 - (Number(item.requests || 0) / max) * 170;
+    return [x, y];
+  });
+}
+
+function pointsToLinePath(points) {
+  if (points.length === 0) return 'M0 220 L640 220';
+  return points.map(([x, y], index) => `${index === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
+}
+
+function chartLabels(data) {
+  if (data.length < 2) return ['now-60s', 'now'];
+  const first = formatChartTime(data[0].timestamp);
+  const middle = formatChartTime(data[Math.floor(data.length / 2)].timestamp);
+  const last = formatChartTime(data[data.length - 1].timestamp);
+  return Array.from(new Set([first, middle, last]));
+}
+
+function formatChartTime(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
 function buildRecentLogs(routes) {

@@ -1,5 +1,7 @@
 const DEFAULT_BASE_URL = import.meta.env.VITE_GATEWAY_BASE_URL || 'http://localhost:8080';
+const DEFAULT_LOG_SERVICE_BASE_URL = import.meta.env.VITE_LOG_SERVICE_BASE_URL || 'http://localhost:8081';
 const BASE_URL_KEY = 'gateway_admin_base_url';
+const LOG_SERVICE_BASE_URL_KEY = 'gateway_admin_log_service_base_url';
 const ACCESS_TOKEN_KEY = 'gateway_admin_access_token';
 const REFRESH_TOKEN_KEY = 'gateway_admin_refresh_token';
 
@@ -14,6 +16,16 @@ export function getSavedBaseUrl() {
 export function saveBaseUrl(baseUrl) {
   const normalized = normalizeBaseUrl(baseUrl);
   localStorage.setItem(BASE_URL_KEY, normalized);
+  return normalized;
+}
+
+export function getSavedLogServiceBaseUrl() {
+  return localStorage.getItem(LOG_SERVICE_BASE_URL_KEY) || DEFAULT_LOG_SERVICE_BASE_URL;
+}
+
+export function saveLogServiceBaseUrl(baseUrl) {
+  const normalized = normalizeBaseUrl(baseUrl);
+  localStorage.setItem(LOG_SERVICE_BASE_URL_KEY, normalized);
   return normalized;
 }
 
