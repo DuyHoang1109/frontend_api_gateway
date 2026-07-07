@@ -32,7 +32,7 @@ export const sections = [
   { id: 'instances', label: 'Instances', icon: Server },
   { id: 'routes', label: 'Routes', icon: GitFork },
   { id: 'plugins', label: 'Plugins', icon: PlugZap },
-  { id: 'consumers', label: 'Consumers', icon: Users },
+  { id: 'consumers', label: 'Clients', icon: Users },
   { id: 'roles', label: 'Roles', icon: ShieldCheck },
   { id: 'permissions', label: 'Permissions', icon: ListChecks },
   { id: 'api-keys', label: 'API Keys', icon: KeyRound },
@@ -63,10 +63,10 @@ export const backendFeatureStatus = {
     summary: 'Konga manages global, service, route, and consumer plugins. GW_v1 has gateway_plugins tables, but no admin API is exposed yet.'
   },
   consumers: {
-    title: 'Consumers',
-    status: 'missing',
-    endpoints: ['GET /admin/consumers', 'POST /admin/consumers', 'PUT /admin/consumers/:id', 'DELETE /admin/consumers/:id'],
-    summary: 'Konga has consumer management. GW_v1 currently does not expose consumer/user-facing admin endpoints.'
+    title: 'Clients',
+    status: 'bound',
+    endpoints: ['GET /admin/clients', 'POST /admin/clients', 'GET /admin/clients/:id', 'PUT /admin/clients/:id', 'DELETE /admin/clients/:id'],
+    summary: 'Create, inspect, update, and soft-delete gateway clients used by API keys.'
   },
   roles: {
     title: 'Roles',
@@ -161,4 +161,4 @@ export const backendFeatureStatus = {
   }
 };
 
-export const standaloneFeaturePages = ['info', 'roles', 'permissions', 'api-keys', 'rate-limits', 'security', 'upstreams', 'healthchecks', 'connections', 'settings'];
+export const standaloneFeaturePages = ['info', 'consumers', 'roles', 'permissions', 'api-keys', 'rate-limits', 'security', 'upstreams', 'healthchecks', 'connections', 'settings'];

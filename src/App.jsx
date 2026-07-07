@@ -23,6 +23,7 @@ import { filterRows } from './utils/filterRows.js';
 import { Alert, DetailModal, StatusPill } from './components/common.jsx';
 import ConnectionsPage from './pages/ConnectionsPage.jsx';
 import APIKeysPage from './pages/APIKeysPage.jsx';
+import ClientsPage from './pages/ClientsPage.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import HealthChecksPage from './pages/HealthChecksPage.jsx';
 import InfoPage from './pages/InfoPage.jsx';
@@ -601,6 +602,13 @@ export default function App() {
             api={api}
             baseUrl={baseUrl}
             accessToken={accessToken}
+          />
+        )}
+
+        {isAuthenticated && activeSection === 'consumers' && (
+          <ClientsPage
+            api={api}
+            onNavigate={navigate}
           />
         )}
 

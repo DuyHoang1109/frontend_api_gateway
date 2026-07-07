@@ -25,12 +25,12 @@ export function Field({ label, value, onChange, type = 'text', required = false,
   );
 }
 
-export function SelectField({ label, value, onChange, options, required = false }) {
+export function SelectField({ label, value, onChange, options, required = false, placeholder = 'Choose...' }) {
   return (
     <label className="field">
       <span>{label}</span>
       <select value={value || ''} required={required} onChange={(event) => onChange(event.target.value)}>
-        <option value="">Choose...</option>
+        <option value="">{placeholder}</option>
         {options.map((option) => {
           const normalized = typeof option === 'string' ? { value: option, label: option } : option;
           return <option key={normalized.value} value={normalized.value}>{normalized.label}</option>;
