@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Loader2, LogIn, LogOut, RefreshCcw, Save, Search, UserCircle } from 'lucide-react';
+import { Loader2, LogIn, LogOut, RefreshCcw, Search, UserCircle } from 'lucide-react';
 import {
   clearAuthTokens,
   createGatewayAdminApi,
@@ -76,8 +76,10 @@ export default function App() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [search, setSearch] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
   const [authUser, setAuthUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(false);
+  const [authChecking, setAuthChecking] = useState(Boolean(accessToken));
   const [selected, setSelected] = useState(null);
   const [serviceForm, setServiceForm] = useState(defaultServiceForm);
   const [instanceForm, setInstanceForm] = useState(defaultInstanceForm);
@@ -133,6 +135,12 @@ export default function App() {
   }, [activeSection, authUser, pages]);
 
   useEffect(() => {
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0 });
+    });
+  }, [activeSection]);
+
+  useEffect(() => {
     const onPopState = () => {
       const section = sectionFromLocation();
       setActiveSection(section);
@@ -153,9 +161,11 @@ export default function App() {
   async function loadCurrentUser() {
     if (!accessToken) {
       setAuthUser(null);
+      setAuthChecking(false);
       return;
     }
 
+    setAuthChecking(true);
     try {
       const currentUser = await api.me();
       setAuthUser(currentUser);
@@ -167,15 +177,23 @@ export default function App() {
       setAccessToken('');
       setAuthUser(null);
       setActiveSection('login');
+    } finally {
+      setAuthChecking(false);
     }
   }
 
   function navigate(sectionId) {
     if (!authUser && sectionId !== 'login') {
+      setError('');
+      setNotice('');
       setActiveSection('login');
       return;
     }
 
+    if (sectionId !== activeSection) {
+      setError('');
+      setNotice('');
+    }
     setActiveSection(sectionId);
   }
 
@@ -410,6 +428,8 @@ export default function App() {
     setServiceForm(defaultServiceForm);
     setInstanceForm(defaultInstanceForm);
     setRouteForm(defaultRouteForm);
+    setError('');
+    setNotice('');
   }
 
   const filteredServices = filterRows(services, search);
@@ -420,6 +440,59 @@ export default function App() {
   const routePage = pageSlice(filteredRoutes, pages.routes, PAGE_SIZE);
   const isAuthenticated = Boolean(authUser);
   const visibleSections = isAuthenticated ? sections : sections.filter((section) => section.id === 'login');
+  const searchableSections = {
+    services: 'Search services...',
+    instances: 'Search instances...',
+    routes: 'Search routes...'
+  };
+  const searchPlaceholder = searchableSections[activeSection];
+  const searchTerm = search.trim().toLowerCase();
+  const searchSuggestions = searchTerm ? getSearchSuggestions(activeSection, {
+    services,
+    instances,
+    routes,
+    serviceName
+  }, searchTerm) : [];
+  const showSearchSuggestions = Boolean(searchFocused && searchTerm);
+
+  function chooseSearchSuggestion(suggestion) {
+    if (!suggestion) return;
+    setSearch(suggestion.value);
+    setPages((current) => ({ ...current, [activeSection]: 1 }));
+    setSearchFocused(false);
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0 });
+    });
+  }
+
+  if (!isAuthenticated && authChecking) {
+    return (
+      <main className="login-shell">
+        <div className="login-loading">
+          <Loader2 className="spin" size={22} />
+          <span>Checking session</span>
+        </div>
+      </main>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <main className="login-shell">
+        {error && <Alert type="error" message={error} onClose={() => setError('')} />}
+        {notice && <Alert type="success" message={notice} onClose={() => setNotice('')} />}
+        <LoginPage
+          currentUser={authUser}
+          loading={authLoading}
+          onLogin={login}
+          onNavigate={navigate}
+          baseUrl={baseUrl}
+          setBaseUrl={setBaseUrl}
+          onSaveBaseUrl={persistBaseUrl}
+        />
+      </main>
+    );
+  }
 
   return (
     <div className="app-shell">
@@ -428,23 +501,27 @@ export default function App() {
           <div className="brand-mark">GW</div>
           <div>
             <strong>Gateway Admin</strong>
-            <span>React dashboard</span>
+            <span>Control Plane</span>
           </div>
         </div>
 
         <nav className="nav-list">
-          {visibleSections.map((section) => {
+          {visibleSections.map((section, index) => {
             const Icon = section.icon;
+            const previousGroup = visibleSections[index - 1]?.group;
+            const showGroup = section.group && section.group !== previousGroup;
             return (
-              <button
-                key={section.id}
-                className={activeSection === section.id ? 'active' : ''}
-                onClick={() => navigate(section.id)}
-                title={section.label}
-              >
-                <Icon size={18} />
-                <span>{section.label}</span>
-              </button>
+              <React.Fragment key={section.id}>
+                {showGroup && <span className="nav-group-label">{section.group}</span>}
+                <button
+                  className={activeSection === section.id ? 'active' : ''}
+                  onClick={() => navigate(section.id)}
+                  title={section.label}
+                >
+                  <Icon size={18} />
+                  <span>{section.label}</span>
+                </button>
+              </React.Fragment>
             );
           })}
         </nav>
@@ -457,15 +534,10 @@ export default function App() {
             <h1>{sections.find((section) => section.id === activeSection)?.label}</h1>
           </div>
           <div className="topbar-actions">
-            <div className="base-url">
-              <span>Gateway URL</span>
-              <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} />
-              <button className="icon-button" onClick={persistBaseUrl} title="Save gateway URL">
-                <Save size={17} />
-              </button>
-            </div>
-            <button className="icon-button" onClick={loadAll} title="Reload data">
+            <StatusPill active={Boolean(health)} label={health ? 'Gateway reachable' : 'Gateway unknown'} />
+            <button className="ghost-button" type="button" onClick={loadAll} title="Refresh dashboard data">
               {loading ? <Loader2 className="spin" size={18} /> : <RefreshCcw size={18} />}
+              Refresh
             </button>
             {authUser ? (
               <div className="topbar-auth">
@@ -486,18 +558,49 @@ export default function App() {
           </div>
         </header>
 
-        {isAuthenticated && (
+        {isAuthenticated && searchPlaceholder && (
           <div className="status-row">
             <div className="search-box">
               <Search size={17} />
-              <input placeholder="Search services, routes, instances..." value={search} onChange={(event) => {
-                setSearch(event.target.value);
-                if (PAGINATED_SECTIONS.has(activeSection)) {
+              <input
+                placeholder={searchPlaceholder}
+                value={search}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => window.setTimeout(() => setSearchFocused(false), 120)}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setSearchFocused(true);
                   setPages((current) => ({ ...current, [activeSection]: 1 }));
-                }
-              }} />
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    chooseSearchSuggestion(searchSuggestions[0] || (searchTerm ? { value: search } : null));
+                  }
+                  if (event.key === 'Escape') {
+                    setSearchFocused(false);
+                  }
+                }}
+              />
+              {showSearchSuggestions && (
+                <div className="search-suggestions">
+                  {searchSuggestions.length > 0 ? searchSuggestions.map((suggestion) => (
+                    <button
+                      type="button"
+                      key={suggestion.id}
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        chooseSearchSuggestion(suggestion);
+                      }}
+                    >
+                      <strong>{suggestion.title}</strong>
+                      <small>{suggestion.detail}</small>
+                    </button>
+                  )) : (
+                    <div className="search-suggestion-empty">No matching results</div>
+                  )}
+                </div>
+              )}
             </div>
-            <StatusPill active={Boolean(health)} label={health ? 'Gateway reachable' : 'Gateway unknown'} />
           </div>
         )}
 
@@ -510,6 +613,9 @@ export default function App() {
             loading={authLoading}
             onLogin={login}
             onNavigate={navigate}
+            baseUrl={baseUrl}
+            setBaseUrl={setBaseUrl}
+            onSaveBaseUrl={persistBaseUrl}
           />
         )}
 
@@ -749,6 +855,46 @@ function persistLocation(section, page) {
   if (PAGINATED_SECTIONS.has(section)) params.set('page', String(page));
   else params.delete('page');
   window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+}
+
+function getSearchSuggestions(section, data, term) {
+  if (section === 'services') {
+    return data.services
+      .filter((service) => JSON.stringify(service).toLowerCase().includes(term))
+      .slice(0, 6)
+      .map((service) => ({
+        id: service.id,
+        value: service.name,
+        title: service.name,
+        detail: `${service.protocol || 'http'} / ${service.lb_strategy || 'round_robin'}`
+      }));
+  }
+
+  if (section === 'instances') {
+    return data.instances
+      .filter((instance) => JSON.stringify(instance).toLowerCase().includes(term))
+      .slice(0, 6)
+      .map((instance) => ({
+        id: instance.id,
+        value: `${instance.host}:${instance.port}`,
+        title: `${instance.host}:${instance.port}`,
+        detail: data.serviceName(instance.service_id)
+      }));
+  }
+
+  if (section === 'routes') {
+    return data.routes
+      .filter((route) => JSON.stringify(route).toLowerCase().includes(term))
+      .slice(0, 6)
+      .map((route) => ({
+        id: route.id,
+        value: route.path,
+        title: `${route.method} ${route.path}`,
+        detail: data.serviceName(route.service_id)
+      }));
+  }
+
+  return [];
 }
 
 function pageSlice(items, requestedPage, pageSize) {

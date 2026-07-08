@@ -24,29 +24,29 @@ import {
 } from 'lucide-react';
 
 export const sections = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'login', label: 'Login', icon: LogIn },
-  { id: 'profile', label: 'Profile', icon: UserCircle },
-  { id: 'info', label: 'Info', icon: CircleDot },
-  { id: 'services', label: 'Services', icon: Cloud },
-  { id: 'instances', label: 'Instances', icon: Server },
-  { id: 'routes', label: 'Routes', icon: GitFork },
-  { id: 'plugins', label: 'Plugins', icon: PlugZap },
-  { id: 'consumers', label: 'Clients', icon: Users },
-  { id: 'roles', label: 'Roles', icon: ShieldCheck },
-  { id: 'permissions', label: 'Permissions', icon: ListChecks },
-  { id: 'api-keys', label: 'API Keys', icon: KeyRound },
-  { id: 'rate-limits', label: 'Rate Limits', icon: SlidersHorizontal },
-  { id: 'security', label: 'Security', icon: Shield },
-  { id: 'aggregation', label: 'Aggregation', icon: ListChecks },
-  { id: 'upstreams', label: 'Upstreams', icon: Network },
-  { id: 'certificates', label: 'Certificates', icon: Lock },
-  { id: 'healthchecks', label: 'Health Checks', icon: HeartPulse },
-  { id: 'logs', label: 'Logs', icon: TerminalSquare },
-  { id: 'connections', label: 'Connections', icon: Compass },
-  { id: 'snapshots', label: 'Snapshots', icon: Archive },
-  { id: 'cluster', label: 'Cluster', icon: Route },
-  { id: 'settings', label: 'Settings', icon: Settings }
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, group: 'Overview' },
+  { id: 'logs', label: 'Logs', icon: TerminalSquare, group: 'Overview' },
+  { id: 'healthchecks', label: 'Health Checks', icon: HeartPulse, group: 'Overview' },
+  { id: 'info', label: 'Info', icon: CircleDot, group: 'Overview' },
+  { id: 'services', label: 'Services', icon: Cloud, group: 'Gateway Config' },
+  { id: 'instances', label: 'Instances', icon: Server, group: 'Gateway Config' },
+  { id: 'routes', label: 'Routes', icon: GitFork, group: 'Gateway Config' },
+  { id: 'upstreams', label: 'Upstreams', icon: Network, group: 'Gateway Config' },
+  { id: 'plugins', label: 'Plugins', icon: PlugZap, group: 'Gateway Config' },
+  { id: 'api-keys', label: 'API Keys', icon: KeyRound, group: 'Access' },
+  { id: 'consumers', label: 'Clients', icon: Users, group: 'Access' },
+  { id: 'rate-limits', label: 'Rate Limits', icon: SlidersHorizontal, group: 'Access' },
+  { id: 'security', label: 'Security', icon: Shield, group: 'Access' },
+  { id: 'roles', label: 'Roles', icon: ShieldCheck, group: 'Authorization' },
+  { id: 'permissions', label: 'Permissions', icon: ListChecks, group: 'Authorization' },
+  { id: 'aggregation', label: 'Aggregation', icon: ListChecks, group: 'Advanced' },
+  { id: 'certificates', label: 'Certificates', icon: Lock, group: 'Advanced' },
+  { id: 'connections', label: 'Connections', icon: Compass, group: 'Advanced' },
+  { id: 'snapshots', label: 'Snapshots', icon: Archive, group: 'Advanced' },
+  { id: 'cluster', label: 'Cluster', icon: Route, group: 'Advanced' },
+  { id: 'settings', label: 'Settings', icon: Settings, group: 'System' },
+  { id: 'profile', label: 'Profile', icon: UserCircle, group: 'System' },
+  { id: 'login', label: 'Login', icon: LogIn, group: 'System' }
 ];
 
 export const backendFeatureStatus = {
@@ -139,7 +139,7 @@ export const backendFeatureStatus = {
     title: 'Connections',
     status: 'local',
     endpoints: ['localStorage gateway_admin_base_url'],
-    summary: 'Konga manages Kong node connections. This dashboard uses the Gateway URL box in the top bar instead.'
+    summary: 'Konga manages Kong node connections. This dashboard keeps the Gateway URL in Settings.'
   },
   snapshots: {
     title: 'Snapshots',

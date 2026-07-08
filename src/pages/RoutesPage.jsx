@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ShieldCheck, Trash2, X } from 'lucide-react';
-import { EmptyState, Field, FormActions, Pagination, Panel, RowActions, SelectField, StatusPill, Toggle } from '../components/common.jsx';
+import { Alert, EmptyState, Field, FormActions, Pagination, Panel, RowActions, SelectField, StatusPill, Toggle } from '../components/common.jsx';
 
 const HTTP_METHOD_OPTIONS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
 const HEADER_OPTIONS = [
@@ -199,7 +199,7 @@ export default function RoutesPage(props) {
               <button className="icon-button" type="button" onClick={() => setCorsRoute(null)} title="Close CORS config"><X size={18} /></button>
             </div>
             <form className="form-grid cors-form" onSubmit={saveCORS}>
-              {(corsError || corsMessage) && <div className={`alert field-wide ${corsError ? 'error' : 'success'}`}>{corsError || corsMessage}</div>}
+              {(corsError || corsMessage) && <Alert type={corsError ? 'error' : 'success'} message={corsError || corsMessage} onClose={() => { setCorsError(''); setCorsMessage(''); }} className="field-wide" />}
               <div className="cors-left-column">
                 <label className="field cors-origins">
                   <span>Allowed origins (one per line)</span>

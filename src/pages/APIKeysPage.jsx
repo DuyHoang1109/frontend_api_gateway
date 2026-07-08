@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Ban, Copy, Database, Edit3, KeyRound, Play, RefreshCw, X } from 'lucide-react';
-import { DetailModal, EmptyState, Field, Pagination, Panel, SelectField, StatusPill, Toggle } from '../components/common.jsx';
+import { Alert, DetailModal, EmptyState, Field, Pagination, Panel, SelectField, StatusPill, Toggle } from '../components/common.jsx';
 import { normalizeBaseUrl } from '../api/storage.js';
 
 const PAGE_SIZE = 5;
@@ -138,6 +138,8 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
     setEditingId('');
     setForm(emptyForm);
     setScopeQuery('');
+    setError('');
+    setMessage('');
   }
 
   function toggleScope(scopeId) {
@@ -219,12 +221,7 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
 
   return (
     <section className="content-stack">
-      {(error || message) && (
-        <div className={`alert ${error ? 'error' : 'success'}`}>
-          <span>{error || message}</span>
-          <button type="button" onClick={() => { setError(''); setMessage(''); }} title="Close"><X size={16} /></button>
-        </div>
-      )}
+      {(error || message) && <Alert type={error ? 'error' : 'success'} message={error || message} onClose={() => { setError(''); setMessage(''); }} />}
 
       {createdKey && (
         <div className="api-key-secret">
@@ -296,10 +293,16 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
               <td>{formatDate(key.last_used_at)}</td>
               <td><StatusPill active={isUsable(key)} label={key.revoked_at ? 'revoked' : isExpired(key) ? 'expired' : key.is_active ? 'active' : 'inactive'} /></td>
               <td><div className="row-actions">
-                <button className="ghost-icon" type="button" onClick={() => inspect(key)} title="View detail"><Database size={16} /></button>
-                <button className="ghost-icon" type="button" onClick={() => startEdit(key)} title="Edit"><Edit3 size={16} /></button>
-                <button className="ghost-icon" type="button" onClick={() => rotate(key)} title="Rotate key"><RefreshCw size={16} /></button>
-                <button className="danger-icon" type="button" onClick={() => revoke(key)} disabled={!key.is_active} title="Revoke key"><Ban size={16} /></button>
+                <span className="action-group">
+                  <button className="ghost-icon" type="button" onClick={() => inspect(key)} title="View detail"><Database size={16} /></button>
+                  <button className="ghost-icon" type="button" onClick={() => startEdit(key)} title="Edit"><Edit3 size={16} /></button>
+                </span>
+                <span className="action-group secondary-actions">
+                  <button className="ghost-icon" type="button" onClick={() => rotate(key)} title="Rotate key"><RefreshCw size={16} /></button>
+                </span>
+                <span className="action-group danger-actions">
+                  <button className="danger-icon" type="button" onClick={() => revoke(key)} disabled={!key.is_active} title="Revoke key"><Ban size={16} /></button>
+                </span>
               </div></td>
             </tr>
           ))}</tbody>

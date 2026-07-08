@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Database, RefreshCw, Search, X } from 'lucide-react';
-import { DetailModal, EmptyState, Field, Pagination, Panel, SelectField } from '../components/common.jsx';
+import { Alert, DetailModal, EmptyState, Field, Pagination, Panel, SelectField } from '../components/common.jsx';
 
 const PAGE_SIZE = 10;
 const initialFilters = {
@@ -51,6 +51,12 @@ export default function LogsPage({ api }) {
 
   function applyFilters(event) {
     event.preventDefault();
+    const validationError = validateStatusFilters(filters);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setError('');
     setPage(1);
     setAppliedFilters(filters);
   }
@@ -61,27 +67,39 @@ export default function LogsPage({ api }) {
     setPage(1);
   }
 
+  function updateStatusClass(statusClass) {
+    setFilters((current) => ({
+      ...current,
+      status_class: statusClass,
+      status_code: statusCodeMatchesClass(current.status_code, statusClass) ? current.status_code : ''
+    }));
+  }
+
+  function updateStatusCode(statusCode) {
+    const normalizedCode = statusCode.replace(/\D/g, '').slice(0, 3);
+    setFilters((current) => ({
+      ...current,
+      status_code: normalizedCode,
+      status_class: current.status_class || statusClassForCode(normalizedCode)
+    }));
+  }
+
   return (
     <section className="content-stack">
-      {error && (
-        <div className="alert error">
-          <span>{error}</span>
-          <button type="button" onClick={() => setError('')} title="Close"><X size={16} /></button>
-        </div>
-      )}
+      {error && <Alert type="error" message={error} onClose={() => setError('')} />}
 
       <Panel title="Request logs" eyebrow="GET /admin/logs" className="request-logs-panel">
         <form className="form-grid logs-filter-form" onSubmit={applyFilters}>
           <Field label="Search" value={filters.q} onChange={(value) => setFilters({ ...filters, q: value })} placeholder="trace, path, error..." />
           <Field label="Service" value={filters.service_name} onChange={(value) => setFilters({ ...filters, service_name: value })} placeholder="order-service" />
           <SelectField label="Method" value={filters.method} onChange={(value) => setFilters({ ...filters, method: value })} options={['GET', 'POST', 'PUT', 'PATCH', 'DELETE']} />
-          <SelectField label="Status class" value={filters.status_class} onChange={(value) => setFilters({ ...filters, status_class: value })} options={['2xx', '3xx', '4xx', '5xx']} />
-          <Field label="Status code" value={filters.status_code} onChange={(value) => setFilters({ ...filters, status_code: value })} placeholder="200" />
+          <SelectField label="Status class" value={filters.status_class} onChange={updateStatusClass} options={['2xx', '3xx', '4xx', '5xx']} />
+          <Field label="Status code" value={filters.status_code} onChange={updateStatusCode} placeholder="200" />
           <Field label="Client IP" value={filters.client_ip} onChange={(value) => setFilters({ ...filters, client_ip: value })} placeholder="127.0.0.1" />
           <div className="form-actions logs-actions">
             <button className="primary-button" type="submit"><Search size={17} />Search</button>
-            <button className="ghost-button" type="button" onClick={clearFilters}><X size={17} />Clear</button>
             <button className="icon-button" type="button" onClick={loadLogs} title="Reload logs"><RefreshCw className={loading ? 'spin' : ''} size={17} /></button>
+            <button className="ghost-button" type="button" onClick={clearFilters}><X size={17} />Clear</button>
           </div>
         </form>
       </Panel>
@@ -130,4 +148,26 @@ function formatDate(value) {
 
 function shortId(value) {
   return String(value || '').slice(0, 8);
+}
+
+function statusClassForCode(statusCode) {
+  if (!/^[1-5]\d{2}$/.test(statusCode)) return '';
+  return `${statusCode[0]}xx`;
+}
+
+function statusCodeMatchesClass(statusCode, statusClass) {
+  if (!statusCode || !statusClass) return true;
+  return statusClassForCode(statusCode) === statusClass;
+}
+
+function validateStatusFilters(filters) {
+  const statusCode = filters.status_code.trim();
+  if (!statusCode) return '';
+  if (!/^\d{3}$/.test(statusCode)) return 'Status code must be exactly 3 digits, e.g. 200 or 404.';
+  const statusClass = statusClassForCode(statusCode);
+  if (!statusClass) return 'Status code must be between 100 and 599.';
+  if (filters.status_class && filters.status_class !== statusClass) {
+    return `Status code ${statusCode} belongs to ${statusClass}, not ${filters.status_class}.`;
+  }
+  return '';
 }

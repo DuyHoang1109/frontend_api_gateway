@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, ChevronLeft, ChevronRight, Database, Edit3, Plus, Save, Trash2, X } from 'lucide-react';
+import { AlertCircle, Check, ChevronLeft, ChevronRight, CircleCheck, Database, Edit3, Info, Plus, Save, Trash2, X } from 'lucide-react';
 import { backendFeatureStatus } from '../config/navigation.jsx';
 
 export function Panel({ title, eyebrow, children, className = '' }) {
@@ -69,10 +69,14 @@ export function FormActions({ editing, onCancel }) {
 export function RowActions({ onInspect, onEdit, onDelete, children }) {
   return (
     <div className="row-actions">
-      {children}
-      <button className="ghost-icon" onClick={onInspect} title="View detail"><Database size={16} /></button>
-      <button className="ghost-icon" onClick={onEdit} title="Edit"><Edit3 size={16} /></button>
-      <button className="danger-icon" onClick={onDelete} title="Delete"><Trash2 size={16} /></button>
+      <span className="action-group">
+        <button className="ghost-icon" onClick={onInspect} title="View detail"><Database size={16} /></button>
+        <button className="ghost-icon" onClick={onEdit} title="Edit"><Edit3 size={16} /></button>
+      </span>
+      {children && <span className="action-group secondary-actions">{children}</span>}
+      <span className="action-group danger-actions">
+        <button className="danger-icon" onClick={onDelete} title="Delete"><Trash2 size={16} /></button>
+      </span>
     </div>
   );
 }
@@ -155,11 +159,21 @@ export function FeatureMatrix({ onlyMissing = false }) {
   );
 }
 
-export function Alert({ type, message, onClose }) {
+export function Alert({ type, message, onClose, autoDismissMs = 4000, className = '' }) {
+  React.useEffect(() => {
+    if (!message || !autoDismissMs || !onClose) return undefined;
+    const timer = window.setTimeout(onClose, autoDismissMs);
+    return () => window.clearTimeout(timer);
+  }, [message, autoDismissMs, onClose]);
+
+  const Icon = type === 'error' ? AlertCircle : type === 'success' ? CircleCheck : Info;
+
   return (
-    <div className={`alert ${type}`}>
-      <span>{message}</span>
-      <button onClick={onClose} title="Close"><X size={16} /></button>
+    <div className={`alert ${type} ${className}`} role="status">
+      <span className="alert-icon"><Icon size={17} /></span>
+      <span className="alert-message">{message}</span>
+      <button type="button" onClick={onClose} title="Close"><X size={15} /></button>
+      {autoDismissMs ? <span className="alert-timer" style={{ '--alert-duration': `${autoDismissMs}ms` }} /> : null}
     </div>
   );
 }

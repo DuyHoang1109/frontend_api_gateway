@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Database, RefreshCw, X } from 'lucide-react';
-import { EmptyState, Pagination, Panel, StatusPill } from '../components/common.jsx';
+import { Alert, EmptyState, Pagination, Panel, StatusPill } from '../components/common.jsx';
 
 const PAGE_SIZE = 10;
 
@@ -49,7 +49,7 @@ export default function PermissionsPage({ api }) {
 
   return (
     <section className="content-stack">
-      {error && <div className="alert error"><span>{error}</span><button type="button" onClick={() => setError('')}><X size={16} /></button></div>}
+      {error && <Alert type="error" message={error} onClose={() => setError('')} />}
 
       <Panel title="Permissions" eyebrow="GET /admin/permissions">
         <div className="table-toolbar">

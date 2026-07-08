@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Activity, AlertCircle, Cloud, Download, Filter, Gauge, GitFork, Globe2, LayoutDashboard, RefreshCcw, ShieldCheck, Server } from 'lucide-react';
-import { backendFeatureStatus, sections } from '../config/navigation.jsx';
+import { Activity, AlertCircle, Cloud, Download, Filter, Gauge, GitFork, Globe2, RefreshCcw, ShieldCheck, Server } from 'lucide-react';
 import { EmptyState, Metric } from '../components/common.jsx';
 
 export default function Dashboard({ api, services, instances, routes, health, ready, onNavigate }) {
@@ -12,7 +11,6 @@ export default function Dashboard({ api, services, instances, routes, health, re
   const activeServices = services.filter((item) => item.is_active).length;
   const activeInstances = instances.filter((item) => item.is_active).length;
   const activeRoutes = routes.filter((item) => item.is_active).length;
-  const missingFeatureCount = Object.values(backendFeatureStatus).filter((feature) => feature.status === 'missing').length;
   const systemHealth = health && ready ? '99.9%' : health ? '75.0%' : '0%';
   const recentLogs = requestLogs.length > 0 ? normalizeLogs(requestLogs) : buildRecentLogs(routes);
   const summary = snapshot?.summary || {};
@@ -138,6 +136,29 @@ export default function Dashboard({ api, services, instances, routes, health, re
     return 'Connecting';
   }, [streamStatus]);
 
+  function exportRecentLogs() {
+    const headers = ['Timestamp', 'Method', 'Path', 'Status', 'Latency'];
+    const rows = recentLogs.map((log) => [
+      log.timestamp,
+      log.method,
+      log.path,
+      log.status,
+      `${log.latency}ms`
+    ]);
+    const csv = [headers, ...rows]
+      .map((row) => row.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `recent-api-logs-${new Date().toISOString().slice(0, 19).replaceAll(':', '-')}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <section className="dashboard-stack">
       <div className="dashboard-kpi-grid">
@@ -147,12 +168,11 @@ export default function Dashboard({ api, services, instances, routes, health, re
         <KpiCard title="System Health" value={systemHealth} trend={health ? 'All systems operational' : 'Gateway unavailable'} trendTone={health ? 'up' : 'down'} icon={ShieldCheck} />
       </div>
 
-      <section className="page-grid compact-metrics">
+      <section className="page-grid compact-metrics dashboard-resource-grid">
         <Metric title="Services" value={services.length} detail={`${activeServices} active`} icon={Cloud} onClick={() => onNavigate('services')} />
         <Metric title="Instances" value={instances.length} detail={`${activeInstances} active`} icon={Server} onClick={() => onNavigate('instances')} />
         <Metric title="Routes" value={routes.length} detail={`${activeRoutes} active`} icon={GitFork} onClick={() => onNavigate('routes')} />
         <Metric title="Health" value={health ? 'OK' : '-'} detail={ready ? 'ready endpoint online' : 'ready unknown'} icon={Activity} onClick={() => onNavigate('info')} />
-        <Metric title="Konga Modules" value={sections.length - 1} detail={`${missingFeatureCount} need backend APIs`} icon={LayoutDashboard} />
       </section>
 
       <div className="dashboard-main-grid">
@@ -204,8 +224,8 @@ export default function Dashboard({ api, services, instances, routes, health, re
               <h2>Recent API Logs</h2>
             </div>
             <div className="table-tools">
-              <button className="tiny-button"><Filter size={13} /> Filter</button>
-              <button className="tiny-button"><Download size={13} /> Export</button>
+              <button className="tiny-button" type="button" onClick={() => onNavigate('logs')}><Filter size={13} /> Filter</button>
+              <button className="tiny-button" type="button" onClick={exportRecentLogs} disabled={recentLogs.length === 0}><Download size={13} /> Export</button>
             </div>
           </div>
 
@@ -272,8 +292,8 @@ function KpiCard({ title, subtitle, value, unit, trend, trendTone, note, icon: I
       <strong>{value}{unit && <em>{unit}</em>}</strong>
       {trend && (
         <p className={trendTone === 'up' ? 'trend-up' : 'trend-down'}>
-          {trend}
-          {note && <small>{note}</small>}
+          <span>{trend}</span>
+          {note && <small title={note}>{note}</small>}
         </p>
       )}
     </section>

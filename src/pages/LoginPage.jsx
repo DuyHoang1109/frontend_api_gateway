@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { LogIn, ShieldCheck } from 'lucide-react';
+import { LogIn, Save, ShieldCheck } from 'lucide-react';
 import { Field, Panel } from '../components/common.jsx';
 
-export default function LoginPage({ currentUser, loading, onLogin, onNavigate }) {
+export default function LoginPage({ currentUser, loading, onLogin, onNavigate, baseUrl, setBaseUrl, onSaveBaseUrl }) {
   const [form, setForm] = useState({ username: '', password: '' });
 
   async function submit(event) {
@@ -28,8 +28,16 @@ export default function LoginPage({ currentUser, loading, onLogin, onNavigate })
   }
 
   return (
-    <div className="auth-layout">
-      <Panel title="Login" eyebrow="Authentication" className="auth-panel">
+    <div className="login-stack">
+      <div className="login-brand">
+        <div className="brand-mark">GW</div>
+        <div>
+          <strong>Gateway Admin</strong>
+          <span>Control Plane</span>
+        </div>
+      </div>
+
+      <Panel title="Sign in" eyebrow="Authentication" className="auth-panel">
         <form className="auth-form" onSubmit={submit}>
           <Field
             label="Username or Email"
@@ -51,23 +59,22 @@ export default function LoginPage({ currentUser, loading, onLogin, onNavigate })
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
-      </Panel>
 
-      <Panel title="How it works" eyebrow="JWT">
-        <div className="auth-flow">
-          <div>
-            <strong>1. Login</strong>
-            <span>POST /auth/login with username and password.</span>
+        {baseUrl !== undefined && (
+          <div className="login-connection">
+            <label htmlFor="login-base-url">Gateway URL</label>
+            <div className="login-connection-row">
+              <input
+                id="login-base-url"
+                value={baseUrl}
+                onChange={(event) => setBaseUrl(event.target.value)}
+              />
+              <button className="icon-button" type="button" onClick={onSaveBaseUrl} title="Save Gateway URL">
+                <Save size={16} />
+              </button>
+            </div>
           </div>
-          <div>
-            <strong>2. Store token</strong>
-            <span>The dashboard keeps the access and refresh tokens locally.</span>
-          </div>
-          <div>
-            <strong>3. Renew session</strong>
-            <span>Expired access tokens are renewed through POST /auth/refresh.</span>
-          </div>
-        </div>
+        )}
       </Panel>
     </div>
   );

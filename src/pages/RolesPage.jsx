@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Database, RefreshCw, ShieldCheck, X } from 'lucide-react';
-import { EmptyState, Pagination, Panel, StatusPill } from '../components/common.jsx';
+import { Alert, EmptyState, Pagination, Panel, StatusPill } from '../components/common.jsx';
 
 const PAGE_SIZE = 8;
 
@@ -55,7 +55,7 @@ export default function RolesPage({ api }) {
 
   return (
     <section className="content-stack">
-      {error && <div className="alert error"><span>{error}</span><button type="button" onClick={() => setError('')}><X size={16} /></button></div>}
+      {error && <Alert type="error" message={error} onClose={() => setError('')} />}
 
       <Panel title="Roles" eyebrow="GET /admin/roles">
         <div className="table-toolbar">
