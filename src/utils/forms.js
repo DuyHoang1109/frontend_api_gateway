@@ -24,6 +24,7 @@ export const defaultRouteForm = {
   strip_prefix: false,
   rewrite_target: '',
   auth_required: false,
+  required_scope_id: '',
   rate_limit_id: '',
   priority: 10,
   is_active: true
@@ -65,6 +66,7 @@ export function routePayload(form) {
     strip_prefix: Boolean(form.strip_prefix),
     rewrite_target: toNullable(form.rewrite_target),
     auth_required: Boolean(form.auth_required),
+    required_scope_id: toNullable(form.required_scope_id),
     rate_limit_id: toNullable(form.rate_limit_id),
     priority: Number(form.priority),
     is_active: Boolean(form.is_active)

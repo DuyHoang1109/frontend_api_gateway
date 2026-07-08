@@ -161,4 +161,4 @@ export const backendFeatureStatus = {
   }
 };
 
-export const standaloneFeaturePages = ['info', 'consumers', 'roles', 'permissions', 'api-keys', 'rate-limits', 'security', 'upstreams', 'healthchecks', 'connections', 'settings'];
+export const standaloneFeaturePages = ['info', 'consumers', 'roles', 'permissions', 'api-keys', 'rate-limits', 'security', 'upstreams', 'healthchecks', 'logs', 'connections', 'settings'];

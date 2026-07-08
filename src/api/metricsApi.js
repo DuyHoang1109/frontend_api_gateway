@@ -15,6 +15,7 @@ function queryString(params = {}) {
 export function createMetricsApi(request, getLogBaseUrl, accessToken = '') {
   return {
     getLogs: async (params = {}) => listFrom(await request(`/admin/logs${queryString(params)}`)),
+    getLogsPage: async (params = {}) => pageFrom(await request(`/admin/logs${queryString(params)}`)),
     getMetricsSummary: async (params = {}) => unwrap(await request(`/admin/metrics/summary${queryString(params)}`)),
     getRps: async (params = {}) => unwrap(await request(`/admin/metrics/rps${queryString(params)}`)),
     getErrorRate: async (params = {}) => unwrap(await request(`/admin/metrics/error-rate${queryString(params)}`)),
@@ -23,6 +24,13 @@ export function createMetricsApi(request, getLogBaseUrl, accessToken = '') {
     getTopRoutes: async (params = {}) => unwrap(await request(`/admin/metrics/top-routes${queryString(params)}`)),
     getRealtimeSnapshot: (params = {}) => getRealtimeSnapshot(request, params),
     streamRealtimeMetrics: (params = {}, handlers = {}) => streamRealtimeMetrics(getLogBaseUrl(), accessToken, params, handlers)
+  };
+}
+
+function pageFrom(body) {
+  return {
+    items: listFrom(body),
+    meta: body?.meta || {}
   };
 }
 

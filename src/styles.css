@@ -730,6 +730,59 @@ button {
   gap: 12px;
 }
 
+.request-logs-panel,
+.log-stream-panel {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.logs-filter-form {
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  align-items: end;
+}
+
+.logs-actions {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.log-stream-panel {
+  overflow-x: auto;
+}
+
+.logs-table {
+  min-width: 0;
+}
+
+.logs-table th:first-child { width: 21%; }
+.logs-table th:nth-child(2) { width: 22%; }
+.logs-table th:nth-child(3) { width: 20%; }
+.logs-table th:nth-child(4) { width: 14%; }
+.logs-table th:nth-child(5) { width: 7%; }
+.logs-table th:nth-child(6) { width: 9%; }
+
+.logs-table th:last-child,
+.logs-table td:last-child {
+  width: 48px;
+  padding-right: 0;
+}
+
+.logs-table td {
+  min-width: 0;
+}
+
+.logs-table td > small,
+.logs-table .path-code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logs-table .path-code {
+  display: block;
+}
+
 .field {
   display: grid;
   gap: 6px;
@@ -1437,17 +1490,31 @@ button.feature-card:hover {
 .pagination-controls {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 6px;
+  min-width: 0;
+}
+
+.page-button,
+.page-ellipsis {
+  width: 36px;
+  height: 36px;
 }
 
 .page-button {
-  width: 36px;
-  height: 36px;
   border: 1px solid var(--border);
   border-radius: 7px;
   background: white;
   color: var(--text);
   font-weight: 800;
+}
+
+.page-ellipsis {
+  display: inline-grid;
+  place-items: center;
+  color: var(--muted);
+  letter-spacing: 0;
 }
 
 .page-button:hover,

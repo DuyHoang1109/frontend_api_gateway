@@ -33,6 +33,7 @@ import IPBlacklistPage from './pages/IPBlacklistPage.jsx';
 import InstancesPage from './pages/InstancesPage.jsx';
 import KongaFeaturePage from './pages/KongaFeaturePage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
+import LogsPage from './pages/LogsPage.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
 import PermissionsPage from './pages/PermissionsPage.jsx';
 import RateLimitsPage from './pages/RateLimitsPage.jsx';
@@ -660,6 +661,10 @@ export default function App() {
             onReload={loadDetailedHealth}
             onCheckInstance={checkInstanceHealth}
           />
+        )}
+
+        {isAuthenticated && activeSection === 'logs' && (
+          <LogsPage api={api} />
         )}
 
         {isAuthenticated && activeSection === 'connections' && (

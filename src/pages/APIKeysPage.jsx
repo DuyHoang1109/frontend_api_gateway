@@ -7,7 +7,7 @@ const PAGE_SIZE = 5;
 const emptyForm = {
   label: '',
   client_id: '',
-  permission_ids: [],
+  scope_ids: [],
   rate_limit_id: '',
   expires_at: '',
   is_active: true
@@ -15,13 +15,13 @@ const emptyForm = {
 
 export default function APIKeysPage({ api, baseUrl, accessToken }) {
   const [keys, setKeys] = useState([]);
-  const [options, setOptions] = useState({ clients: [], permissions: [], rate_limits: [] });
+  const [options, setOptions] = useState({ clients: [], api_scopes: [], rate_limits: [] });
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState('');
   const [createdKey, setCreatedKey] = useState('');
   const [selected, setSelected] = useState(null);
   const [search, setSearch] = useState('');
-  const [permissionQuery, setPermissionQuery] = useState('');
+  const [scopeQuery, setScopeQuery] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -50,14 +50,15 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
   const totalPages = Math.max(1, Math.ceil(filteredKeys.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const visibleKeys = filteredKeys.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
-  const filteredPermissions = useMemo(() => {
-    const query = permissionQuery.trim().toLowerCase();
-    if (!query) return options.permissions;
-    return options.permissions.filter((permission) => permission.name.toLowerCase().includes(query));
-  }, [options.permissions, permissionQuery]);
-  const selectedPermissions = useMemo(
-    () => options.permissions.filter((permission) => form.permission_ids.includes(permission.id)),
-    [options.permissions, form.permission_ids]
+  const filteredScopes = useMemo(() => {
+    const scopes = Array.isArray(options.api_scopes) ? options.api_scopes : [];
+    const query = scopeQuery.trim().toLowerCase();
+    if (!query) return scopes;
+    return scopes.filter((scope) => scopeLabel(scope).toLowerCase().includes(query));
+  }, [options.api_scopes, scopeQuery]);
+  const selectedScopes = useMemo(
+    () => (Array.isArray(options.api_scopes) ? options.api_scopes : []).filter((scope) => form.scope_ids.includes(scope.id)),
+    [options.api_scopes, form.scope_ids]
   );
 
   async function loadKeys() {
@@ -84,7 +85,7 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
     return {
       label: form.label.trim() || null,
       client_id: form.client_id.trim(),
-      permission_ids: form.permission_ids,
+      scope_ids: form.scope_ids,
       rate_limit_id: form.rate_limit_id.trim() || null,
       expires_at: form.expires_at ? new Date(form.expires_at).toISOString() : null,
       is_active: form.is_active
@@ -98,8 +99,8 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
       setError('Choose a client');
       return;
     }
-    if (form.permission_ids.length === 0) {
-      setError('Choose at least one permission');
+    if (form.scope_ids.length === 0) {
+      setError('Choose at least one API scope');
       return;
     }
     try {
@@ -121,11 +122,11 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
 
   function startEdit(key) {
     setEditingId(key.id);
-    setPermissionQuery('');
+    setScopeQuery('');
     setForm({
       label: key.label || '',
       client_id: key.client_id || '',
-      permission_ids: (key.permissions || []).map((permission) => permission.id),
+      scope_ids: (key.scopes || []).map((scope) => scope.id),
       rate_limit_id: key.rate_limit_id || '',
       expires_at: toDateTimeLocal(key.expires_at),
       is_active: key.is_active
@@ -136,15 +137,15 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
   function resetForm() {
     setEditingId('');
     setForm(emptyForm);
-    setPermissionQuery('');
+    setScopeQuery('');
   }
 
-  function togglePermission(permissionId) {
+  function toggleScope(scopeId) {
     setForm((current) => ({
       ...current,
-      permission_ids: current.permission_ids.includes(permissionId)
-        ? current.permission_ids.filter((id) => id !== permissionId)
-        : [...current.permission_ids, permissionId]
+      scope_ids: current.scope_ids.includes(scopeId)
+        ? current.scope_ids.filter((id) => id !== scopeId)
+        : [...current.scope_ids, scopeId]
     }));
   }
 
@@ -241,32 +242,32 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
           <SelectField label="Rate limit" value={form.rate_limit_id} onChange={(value) => setForm({ ...form, rate_limit_id: value })} options={options.rate_limits.map((policy) => ({ value: policy.id, label: policy.name }))} />
           <Field label="Expires at" type="datetime-local" value={form.expires_at} onChange={(value) => setForm({ ...form, expires_at: value })} />
           <fieldset className="field permission-picker field-wide">
-            <legend>Permissions</legend>
+            <legend>API scopes</legend>
             <input
               className="permission-search"
               type="search"
-              value={permissionQuery}
-              onChange={(event) => setPermissionQuery(event.target.value)}
-              placeholder="Search resource or action, e.g. services or read"
+              value={scopeQuery}
+              onChange={(event) => setScopeQuery(event.target.value)}
+              placeholder="Search code, resource or action, e.g. orders or read"
             />
-            {selectedPermissions.length > 0 && (
-              <div className="selected-permissions" aria-label="Selected permissions">
-                {selectedPermissions.map((permission) => (
-                  <button key={permission.id} type="button" onClick={() => togglePermission(permission.id)} title={`Remove ${permission.name}`}>
-                    <code>{permission.name}</code><X size={12} />
+            {selectedScopes.length > 0 && (
+              <div className="selected-permissions" aria-label="Selected API scopes">
+                {selectedScopes.map((scope) => (
+                  <button key={scope.id} type="button" onClick={() => toggleScope(scope.id)} title={`Remove ${scopeLabel(scope)}`}>
+                    <code>{scopeLabel(scope)}</code><X size={12} />
                   </button>
                 ))}
               </div>
             )}
             <div className="permission-options">
-              {filteredPermissions.map((permission) => (
-                <label key={permission.id}>
-                  <input type="checkbox" checked={form.permission_ids.includes(permission.id)} onChange={() => togglePermission(permission.id)} />
-                  <code>{permission.name}</code>
+              {filteredScopes.map((scope) => (
+                <label key={scope.id}>
+                  <input type="checkbox" checked={form.scope_ids.includes(scope.id)} onChange={() => toggleScope(scope.id)} />
+                  <code>{scopeLabel(scope)}</code>
                 </label>
               ))}
-              {options.permissions.length === 0 && <small>No active permissions available</small>}
-              {options.permissions.length > 0 && filteredPermissions.length === 0 && <small>No permissions match “{permissionQuery}”</small>}
+              {(options.api_scopes || []).length === 0 && <small>No active API scopes available</small>}
+              {(options.api_scopes || []).length > 0 && filteredScopes.length === 0 && <small>No API scopes match "{scopeQuery}"</small>}
             </div>
           </fieldset>
           <Toggle label="Active" checked={form.is_active} onChange={(value) => setForm({ ...form, is_active: value })} />
@@ -279,17 +280,17 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
 
       <Panel title="API keys" eyebrow="GET /admin/api-keys">
         <div className="table-toolbar">
-          <input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search label, prefix, client or permission..." />
+          <input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search label, prefix, client or scope..." />
           <button className="icon-button" type="button" onClick={loadKeys} title="Reload API keys"><RefreshCw className={loading ? 'spin' : ''} size={17} /></button>
         </div>
         <table className="data-table api-key-table">
-          <thead><tr><th>Key</th><th>Client / permissions</th><th>Expiry</th><th>Last used</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Key</th><th>Client / scopes</th><th>Expiry</th><th>Last used</th><th>Status</th><th></th></tr></thead>
           <tbody>{visibleKeys.map((key) => (
             <tr key={key.id}>
               <td><strong>{key.label || 'Unlabelled key'}</strong><small>{key.key_prefix}...</small></td>
               <td>
                 <small>{clientName(key.client_id)}</small>
-                <div className="scope-list">{(key.permissions || []).map((permission) => <code key={permission.id}>{permission.name}</code>)}</div>
+                <div className="scope-list">{(key.scopes || []).map((scope) => <code key={scope.id}>{scopeLabel(scope)}</code>)}</div>
               </td>
               <td>{formatDate(key.expires_at)}</td>
               <td>{formatDate(key.last_used_at)}</td>
@@ -346,4 +347,11 @@ function isUsable(key) {
 
 function formatDate(value) {
   return value ? new Date(value).toLocaleString() : '-';
+}
+
+function scopeLabel(scope) {
+  if (!scope) return '-';
+  if (scope.code) return scope.code;
+  if (scope.resource && scope.action) return `${scope.resource}:${scope.action}`;
+  return scope.id || '-';
 }

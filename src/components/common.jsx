@@ -187,6 +187,7 @@ export function Pagination({ page, pageSize, totalItems, onPageChange }) {
   const safePage = Math.min(Math.max(page, 1), totalPages);
   const start = totalItems === 0 ? 0 : ((safePage - 1) * pageSize) + 1;
   const end = Math.min(safePage * pageSize, totalItems);
+  const pages = paginationItems(safePage, totalPages);
 
   return (
     <div className="pagination-bar">
@@ -195,17 +196,21 @@ export function Pagination({ page, pageSize, totalItems, onPageChange }) {
         <button className="icon-button" type="button" onClick={() => onPageChange(safePage - 1)} disabled={safePage === 1} title="Previous page">
           <ChevronLeft size={16} />
         </button>
-        {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
-          <button
-            className={`page-button ${pageNumber === safePage ? 'active' : ''}`}
-            type="button"
-            key={pageNumber}
-            onClick={() => onPageChange(pageNumber)}
-            aria-label={`Page ${pageNumber}`}
-            aria-current={pageNumber === safePage ? 'page' : undefined}
-          >
-            {pageNumber}
-          </button>
+        {pages.map((item, index) => (
+          item === 'ellipsis' ? (
+            <span className="page-ellipsis" key={`ellipsis-${index}`}>...</span>
+          ) : (
+            <button
+              className={`page-button ${item === safePage ? 'active' : ''}`}
+              type="button"
+              key={item}
+              onClick={() => onPageChange(item)}
+              aria-label={`Page ${item}`}
+              aria-current={item === safePage ? 'page' : undefined}
+            >
+              {item}
+            </button>
+          )
         ))}
         <button className="icon-button" type="button" onClick={() => onPageChange(safePage + 1)} disabled={safePage === totalPages} title="Next page">
           <ChevronRight size={16} />
@@ -213,4 +218,24 @@ export function Pagination({ page, pageSize, totalItems, onPageChange }) {
       </div>
     </div>
   );
+}
+
+function paginationItems(currentPage, totalPages) {
+  if (totalPages <= 9) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const visible = new Set([1, 2, totalPages - 1, totalPages]);
+  for (let page = currentPage - 2; page <= currentPage + 2; page += 1) {
+    if (page >= 1 && page <= totalPages) visible.add(page);
+  }
+
+  const sorted = Array.from(visible).sort((a, b) => a - b);
+  const items = [];
+  sorted.forEach((page, index) => {
+    const previous = sorted[index - 1];
+    if (previous && page - previous > 1) items.push('ellipsis');
+    items.push(page);
+  });
+  return items;
 }
