@@ -5,9 +5,11 @@ import {
   createGatewayAdminApi,
   getSavedAccessToken,
   getSavedBaseUrl,
+  getSavedLogServiceBaseUrl,
   getSavedRefreshToken,
   saveAccessToken,
   saveBaseUrl,
+  saveLogServiceBaseUrl,
   saveRefreshToken
 } from './api/gatewayAdminApi.js';
 import { backendFeatureStatus, sections, standaloneFeaturePages } from './config/navigation.jsx';
@@ -47,6 +49,7 @@ const LAST_SECTION_KEY = 'gateway_admin_last_section';
 export default function App() {
   const [activeSection, setActiveSection] = useState(() => getInitialSection());
   const [baseUrl, setBaseUrl] = useState(getSavedBaseUrl());
+  const [logServiceBaseUrl, setLogServiceBaseUrl] = useState(getSavedLogServiceBaseUrl());
   const [accessToken, setAccessToken] = useState(getSavedAccessToken());
   const api = useMemo(() => createGatewayAdminApi(baseUrl, accessToken, {
     onTokensRefreshed: (tokens) => setAccessToken(tokens.access_token),
@@ -55,7 +58,7 @@ export default function App() {
       setAuthUser(null);
       setActiveSection('login');
     }
-  }), [baseUrl, accessToken]);
+  }), [baseUrl, logServiceBaseUrl, accessToken]);
 
   const [services, setServices] = useState([]);
   const [instances, setInstances] = useState([]);
@@ -184,6 +187,11 @@ export default function App() {
   function persistBaseUrl() {
     setBaseUrl(saveBaseUrl(baseUrl));
     setNotice('Gateway URL saved');
+  }
+
+  function persistLogServiceBaseUrl() {
+    setLogServiceBaseUrl(saveLogServiceBaseUrl(logServiceBaseUrl));
+    setNotice('Log service URL saved');
   }
 
   async function login(credentials) {
@@ -514,6 +522,7 @@ export default function App() {
 
         {isAuthenticated && activeSection === 'dashboard' && (
           <Dashboard
+            api={api}
             services={services}
             instances={instances}
             routes={routes}
@@ -658,6 +667,9 @@ export default function App() {
             baseUrl={baseUrl}
             setBaseUrl={setBaseUrl}
             onSave={persistBaseUrl}
+            logServiceBaseUrl={logServiceBaseUrl}
+            setLogServiceBaseUrl={setLogServiceBaseUrl}
+            onSaveLogService={persistLogServiceBaseUrl}
           />
         )}
 
@@ -666,6 +678,9 @@ export default function App() {
             baseUrl={baseUrl}
             setBaseUrl={setBaseUrl}
             onSave={persistBaseUrl}
+            logServiceBaseUrl={logServiceBaseUrl}
+            setLogServiceBaseUrl={setLogServiceBaseUrl}
+            onSaveLogService={persistLogServiceBaseUrl}
             services={services}
             instances={instances}
             routes={routes}

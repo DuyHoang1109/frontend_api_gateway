@@ -131,9 +131,9 @@ export const backendFeatureStatus = {
   },
   logs: {
     title: 'Logs & Monitoring',
-    status: 'missing',
-    endpoints: ['GET /admin/logs', 'GET /admin/metrics'],
-    summary: 'Gateway has Elasticsearch infrastructure, but the React dashboard needs log/metric query endpoints to show request latency/status.'
+    status: 'bound',
+    endpoints: ['GET /admin/logs', 'GET /admin/metrics/*', 'GET /admin/metrics/realtime/stream'],
+    summary: 'Request logs, metrics, and realtime dashboard stream are bound through the log-service Elasticsearch APIs.'
   },
   connections: {
     title: 'Connections',

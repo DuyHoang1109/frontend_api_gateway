@@ -8,10 +8,12 @@ import { createCORSApi } from './corsApi.js';
 import { createHealthApi } from './healthApi.js';
 import { createIPBlacklistApi } from './ipBlacklistApi.js';
 import { createInstancesApi } from './instancesApi.js';
+import { createMetricsApi } from './metricsApi.js';
 import { createRateLimitsApi } from './rateLimitsApi.js';
 import { createRoutesApi } from './routesApi.js';
 import { createServicesApi } from './servicesApi.js';
 import { createUsersApi } from './usersApi.js';
+import { getSavedLogServiceBaseUrl } from './storage.js';
 
 export {
   clearAccessToken,
@@ -19,14 +21,17 @@ export {
   clearRefreshToken,
   getSavedAccessToken,
   getSavedBaseUrl,
+  getSavedLogServiceBaseUrl,
   getSavedRefreshToken,
   saveAccessToken,
   saveBaseUrl,
+  saveLogServiceBaseUrl,
   saveRefreshToken
 } from './storage.js';
 
 export function createGatewayAdminApi(baseUrl, accessToken = '', callbacks = {}) {
   const request = createApiClient(baseUrl, accessToken, callbacks);
+  const logRequest = createApiClient(getSavedLogServiceBaseUrl(), accessToken, callbacks);
 
   return {
     ...createHealthApi(request),
@@ -41,6 +46,7 @@ export function createGatewayAdminApi(baseUrl, accessToken = '', callbacks = {})
     ...createServicesApi(request),
     ...createUsersApi(request),
     ...createInstancesApi(request),
-    ...createRoutesApi(request)
+    ...createRoutesApi(request),
+    ...createMetricsApi(logRequest, getSavedLogServiceBaseUrl, accessToken)
   };
 }

@@ -1,13 +1,16 @@
 import React from 'react';
 import { Loader2, RefreshCcw, RotateCcw } from 'lucide-react';
 import { FeatureMatrix, Field, FormActions, InfoItem, Panel } from '../components/common.jsx';
-import { getSavedBaseUrl } from '../api/gatewayAdminApi.js';
+import { getSavedBaseUrl, getSavedLogServiceBaseUrl } from '../api/gatewayAdminApi.js';
 
 export default function SettingsPage(props) {
   const {
     baseUrl,
     setBaseUrl,
     onSave,
+    logServiceBaseUrl,
+    setLogServiceBaseUrl,
+    onSaveLogService,
     services,
     instances,
     routes,
@@ -24,6 +27,11 @@ export default function SettingsPage(props) {
           <Field label="Gateway base URL" value={baseUrl} onChange={setBaseUrl} required />
           <InfoItem label="Cached resources" value={`${services.length} services / ${instances.length} instances / ${routes.length} routes`} />
           <FormActions editing={true} onCancel={() => setBaseUrl(getSavedBaseUrl())} />
+        </form>
+        <form className="form-grid" onSubmit={(event) => { event.preventDefault(); onSaveLogService(); }}>
+          <Field label="Log service URL" value={logServiceBaseUrl} onChange={setLogServiceBaseUrl} required />
+          <InfoItem label="Dashboard metrics source" value={`${logServiceBaseUrl}/admin/metrics/*`} />
+          <FormActions editing={true} onCancel={() => setLogServiceBaseUrl(getSavedLogServiceBaseUrl())} />
         </form>
       </Panel>
 
