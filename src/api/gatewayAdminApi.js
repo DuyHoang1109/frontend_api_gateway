@@ -1,4 +1,5 @@
 import { createApiClient } from './client.js';
+import { createAggregationsApi } from './aggregationsApi.js';
 import { createAuthApi } from './authApi.js';
 import { createAPIKeysApi } from './apiKeysApi.js';
 import { createAuthorizationApi } from './authorizationApi.js';
@@ -35,6 +36,7 @@ export function createGatewayAdminApi(baseUrl, accessToken = '', callbacks = {})
 
   return {
     ...createHealthApi(request),
+    ...createAggregationsApi(request),
     ...createAuthApi(request),
     ...createAPIKeysApi(request),
     ...createAuthorizationApi(request),

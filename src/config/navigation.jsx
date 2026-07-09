@@ -4,6 +4,7 @@ import {
   Cloud,
   Compass,
   GitFork,
+  Globe2,
   HeartPulse,
   KeyRound,
   LayoutDashboard,
@@ -19,6 +20,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   TerminalSquare,
+  UserCog,
   UserCircle,
   Users
 } from 'lucide-react';
@@ -36,9 +38,11 @@ export const sections = [
   { id: 'api-keys', label: 'API Keys', icon: KeyRound, group: 'Access' },
   { id: 'consumers', label: 'Clients', icon: Users, group: 'Access' },
   { id: 'rate-limits', label: 'Rate Limits', icon: SlidersHorizontal, group: 'Access' },
+  { id: 'cors-policies', label: 'CORS Policies', icon: Globe2, group: 'Access' },
   { id: 'security', label: 'Security', icon: Shield, group: 'Access' },
   { id: 'roles', label: 'Roles', icon: ShieldCheck, group: 'Authorization' },
   { id: 'permissions', label: 'Permissions', icon: ListChecks, group: 'Authorization' },
+  { id: 'users', label: 'Users', icon: UserCog, group: 'Authorization' },
   { id: 'aggregation', label: 'Aggregation', icon: ListChecks, group: 'Advanced' },
   { id: 'certificates', label: 'Certificates', icon: Lock, group: 'Advanced' },
   { id: 'connections', label: 'Connections', icon: Compass, group: 'Advanced' },
@@ -80,6 +84,12 @@ export const backendFeatureStatus = {
     endpoints: ['GET /admin/permissions', 'GET /admin/permissions/:id'],
     summary: 'List and inspect permissions by resource and action.'
   },
+  users: {
+    title: 'Users',
+    status: 'bound',
+    endpoints: ['GET /admin/users', 'GET /admin/users/:id', 'PUT /admin/users/:id', 'DELETE /admin/users/:id'],
+    summary: 'List, inspect, update, and soft-delete admin users with role and active status controls.'
+  },
   'api-keys': {
     title: 'API Keys',
     status: 'bound',
@@ -99,6 +109,12 @@ export const backendFeatureStatus = {
     endpoints: ['POST /admin/rate-limit-policies', 'GET /admin/rate-limit-policies', 'GET /admin/rate-limit-policies/:id', 'PUT /admin/rate-limit-policies/:id', 'DELETE /admin/rate-limit-policies/:id'],
     summary: 'Rate limit policy CRUD is bound to the Redis-backed gateway limiter.'
   },
+  'cors-policies': {
+    title: 'CORS Policies',
+    status: 'bound',
+    endpoints: ['POST /admin/cors-policies', 'GET /admin/cors-policies', 'GET /admin/cors-policies/:id', 'PUT /admin/cors-policies/:id', 'DELETE /admin/cors-policies/:id'],
+    summary: 'Manage reusable CORS policies selected by routes and aggregations.'
+  },
   security: {
     title: 'IP Blacklist',
     status: 'bound',
@@ -107,9 +123,9 @@ export const backendFeatureStatus = {
   },
   aggregation: {
     title: 'API Aggregation',
-    status: 'missing',
-    endpoints: ['GET /admin/aggregations', 'POST /admin/aggregations', 'PUT /admin/aggregations/:id', 'DELETE /admin/aggregations/:id'],
-    summary: 'Schema includes aggregation configs/steps. Admin CRUD endpoints are not exposed yet.'
+    status: 'bound',
+    endpoints: ['GET /admin/aggregations', 'POST /admin/aggregations', 'PUT /admin/aggregations/:id', 'DELETE /admin/aggregations/:id', 'GET /admin/aggregations/:id/steps', 'POST /admin/aggregations/:id/steps', 'PUT /admin/aggregation-steps/:id', 'DELETE /admin/aggregation-steps/:id'],
+    summary: 'Manage aggregation endpoints and their ordered upstream steps.'
   },
   upstreams: {
     title: 'Upstreams',
@@ -161,4 +177,4 @@ export const backendFeatureStatus = {
   }
 };
 
-export const standaloneFeaturePages = ['info', 'consumers', 'roles', 'permissions', 'api-keys', 'rate-limits', 'security', 'upstreams', 'healthchecks', 'logs', 'connections', 'settings'];
+export const standaloneFeaturePages = ['info', 'consumers', 'roles', 'permissions', 'users', 'api-keys', 'rate-limits', 'cors-policies', 'security', 'aggregation', 'upstreams', 'healthchecks', 'logs', 'connections', 'settings'];

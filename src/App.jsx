@@ -24,8 +24,10 @@ import {
 import { filterRows } from './utils/filterRows.js';
 import { Alert, DetailModal, StatusPill } from './components/common.jsx';
 import ConnectionsPage from './pages/ConnectionsPage.jsx';
+import AggregationsPage from './pages/AggregationsPage.jsx';
 import APIKeysPage from './pages/APIKeysPage.jsx';
 import ClientsPage from './pages/ClientsPage.jsx';
+import CORSPoliciesPage from './pages/CORSPoliciesPage.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import HealthChecksPage from './pages/HealthChecksPage.jsx';
 import InfoPage from './pages/InfoPage.jsx';
@@ -42,6 +44,7 @@ import RoutesPage from './pages/RoutesPage.jsx';
 import ServicesPage from './pages/ServicesPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 import UpstreamsPage from './pages/UpstreamsPage.jsx';
+import UsersPage from './pages/UsersPage.jsx';
 
 const PAGE_SIZE = 5;
 const PAGINATED_SECTIONS = new Set(['services', 'instances', 'routes']);
@@ -172,11 +175,15 @@ export default function App() {
       if (activeSection === 'login') {
         setActiveSection('dashboard');
       }
-    } catch {
-      clearAuthTokens();
-      setAccessToken('');
-      setAuthUser(null);
-      setActiveSection('login');
+    } catch (err) {
+      if (err.status === 401) {
+        clearAuthTokens();
+        setAccessToken('');
+        setAuthUser(null);
+        setActiveSection('login');
+      } else {
+        setError(err.message || 'Cannot verify current session');
+      }
     } finally {
       setAuthChecking(false);
     }
@@ -419,7 +426,8 @@ export default function App() {
       ...defaultRouteForm,
       ...route,
       rewrite_target: route.rewrite_target || '',
-      rate_limit_id: route.rate_limit_id || ''
+      rate_limit_id: route.rate_limit_id || '',
+      cors_policy_id: route.cors_policy_id || ''
     });
   }
 
@@ -736,8 +744,20 @@ export default function App() {
           <PermissionsPage api={api} />
         )}
 
+        {isAuthenticated && activeSection === 'users' && (
+          <UsersPage api={api} currentUser={authUser} />
+        )}
+
         {isAuthenticated && activeSection === 'rate-limits' && (
           <RateLimitsPage api={api} />
+        )}
+
+        {isAuthenticated && activeSection === 'cors-policies' && (
+          <CORSPoliciesPage api={api} />
+        )}
+
+        {isAuthenticated && activeSection === 'aggregation' && (
+          <AggregationsPage api={api} services={services} />
         )}
 
         {isAuthenticated && activeSection === 'security' && (

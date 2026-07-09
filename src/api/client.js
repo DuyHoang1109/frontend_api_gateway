@@ -49,8 +49,10 @@ async function requestNewTokens(baseUrl) {
   const runningRequest = refreshRequests.get(normalizedBaseUrl);
   if (runningRequest) return runningRequest;
 
+  let attemptedRefreshToken = '';
   const refreshRequest = (async () => {
     const refreshToken = getSavedRefreshToken();
+    attemptedRefreshToken = refreshToken;
     if (!refreshToken) {
       throw new Error('Session expired');
     }
@@ -71,7 +73,17 @@ async function requestNewTokens(baseUrl) {
     saveAccessToken(tokens.access_token);
     saveRefreshToken(tokens.refresh_token);
     return tokens;
-  })();
+  })().catch((error) => {
+    const latestAccessToken = getSavedAccessToken();
+    const latestRefreshToken = getSavedRefreshToken();
+    if (latestAccessToken && latestRefreshToken && latestRefreshToken !== attemptedRefreshToken) {
+      return {
+        access_token: latestAccessToken,
+        refresh_token: latestRefreshToken
+      };
+    }
+    throw error;
+  });
 
   refreshRequests.set(normalizedBaseUrl, refreshRequest);
   try {
@@ -109,8 +121,10 @@ export function createApiClient(baseUrl, accessToken = '', callbacks = {}) {
           : options;
         return request(path, { ...retryOptions, retryOnUnauthorized: false });
       } catch (error) {
-        clearAuthTokens();
-        callbacks.onAuthFailure?.(error);
+        if (error.status === 401) {
+          clearAuthTokens();
+          callbacks.onAuthFailure?.(error);
+        }
         throw error;
       }
     }
