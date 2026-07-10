@@ -1040,6 +1040,13 @@ button {
   min-width: 0;
 }
 
+.logs-filter-note {
+  align-self: end;
+  color: var(--warning);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .logs-custom-range {
   display: grid;
   grid-column: span 2;

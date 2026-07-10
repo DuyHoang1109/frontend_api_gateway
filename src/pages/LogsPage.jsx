@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Database, RefreshCw, Search, X } from 'lucide-react';
 import { Alert, DetailModal, EmptyState, Field, Pagination, Panel, SelectField } from '../components/common.jsx';
 
 const PAGE_SIZE = 10;
 const initialFilters = {
   q: '',
+  search_field: 'path',
   service_name: '',
   method: '',
   status_class: '',
@@ -26,6 +27,14 @@ const timeRangeOptions = [
 ];
 
 const timeOptions = buildTimeOptions();
+const logSearchFieldOptions = [
+  { value: 'path', label: 'Path' },
+  { value: 'normalized_path', label: 'Normalized path' },
+  { value: 'trace_id', label: 'Trace ID' },
+  { value: 'api_key_id', label: 'API key ID' },
+  { value: 'error_message', label: 'Error message' },
+  { value: 'q', label: 'Any text' }
+];
 
 export default function LogsPage({ api, services = [] }) {
   const [logs, setLogs] = useState([]);
@@ -36,6 +45,7 @@ export default function LogsPage({ api, services = [] }) {
   const [totalItems, setTotalItems] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const skipNextEffectRef = useRef(false);
 
   const serviceOptions = useMemo(() => services
     .map((service) => service.name || service.service_name || service.id)
@@ -43,22 +53,22 @@ export default function LogsPage({ api, services = [] }) {
     .sort((left, right) => left.localeCompare(right))
     .map((name) => ({ value: name, label: name })), [services]);
 
-  const query = useMemo(() => ({
-    ...serializeFilters(appliedFilters),
-    page,
-    limit: PAGE_SIZE,
-    sort: '@timestamp:desc'
-  }), [appliedFilters, page]);
+  const query = useMemo(() => buildLogQuery(appliedFilters, page), [appliedFilters, page]);
+  const filtersDirty = !sameFilters(filters, appliedFilters);
 
   useEffect(() => {
-    loadLogs();
+    if (skipNextEffectRef.current) {
+      skipNextEffectRef.current = false;
+      return;
+    }
+    fetchLogs(query);
   }, [query]);
 
-  async function loadLogs() {
+  async function fetchLogs(nextQuery) {
     setLoading(true);
     setError('');
     try {
-      const result = api.getLogsPage ? await api.getLogsPage(query) : { items: await api.getLogs(query), meta: {} };
+      const result = api.getLogsPage ? await api.getLogsPage(nextQuery) : { items: await api.getLogs(nextQuery), meta: {} };
       setLogs(result.items);
       setTotalItems(Number(result.meta?.total ?? result.items.length));
     } catch (err) {
@@ -68,6 +78,10 @@ export default function LogsPage({ api, services = [] }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  function reloadLogs() {
+    fetchLogs(query);
   }
 
   function applyFilters(event) {
@@ -82,15 +96,22 @@ export default function LogsPage({ api, services = [] }) {
       setError(timeError);
       return;
     }
+    const nextFilters = normalizeFilters(filters);
+    const nextQuery = buildLogQuery(nextFilters, 1);
     setError('');
+    skipNextEffectRef.current = true;
     setPage(1);
-    setAppliedFilters(normalizeFilters(filters));
+    setAppliedFilters(nextFilters);
+    fetchLogs(nextQuery);
   }
 
   function clearFilters() {
+    const nextQuery = buildLogQuery(initialFilters, 1);
+    skipNextEffectRef.current = true;
     setFilters(initialFilters);
     setAppliedFilters(initialFilters);
     setPage(1);
+    fetchLogs(nextQuery);
   }
 
   function updateStatusClass(statusClass) {
@@ -136,7 +157,8 @@ export default function LogsPage({ api, services = [] }) {
 
       <Panel title="Request logs" eyebrow="GET /admin/logs" className="request-logs-panel">
         <form className="form-grid logs-filter-form" onSubmit={applyFilters}>
-          <Field label="Search" value={filters.q} onChange={(value) => setFilters({ ...filters, q: value })} placeholder="trace, path, error..." />
+          <Field label="Search" value={filters.q} onChange={(value) => setFilters({ ...filters, q: value })} placeholder={searchPlaceholder(filters.search_field)} />
+          <SelectField label="Search by" value={filters.search_field} onChange={(value) => setFilters({ ...filters, search_field: value || 'path' })} options={logSearchFieldOptions} />
           <SelectField label="Service" value={filters.service_name} onChange={(value) => setFilters({ ...filters, service_name: value })} options={serviceOptions} placeholder="All services" />
           <SelectField label="Method" value={filters.method} onChange={(value) => setFilters({ ...filters, method: value })} options={['GET', 'POST', 'PUT', 'PATCH', 'DELETE']} />
           <SelectField label="Status class" value={filters.status_class} onChange={updateStatusClass} options={['2xx', '3xx', '4xx', '5xx']} />
@@ -177,9 +199,10 @@ export default function LogsPage({ api, services = [] }) {
           )}
           <div className="form-actions logs-actions">
             <button className="primary-button" type="submit"><Search size={17} />Search</button>
-            <button className="icon-button" type="button" onClick={loadLogs} title="Reload logs"><RefreshCw className={loading ? 'spin' : ''} size={17} /></button>
+            <button className="icon-button" type="button" onClick={reloadLogs} title="Reload logs"><RefreshCw className={loading ? 'spin' : ''} size={17} /></button>
             <button className="ghost-button cancel-button" type="button" onClick={clearFilters}><X size={17} />Cancel</button>
           </div>
+          {filtersDirty && <span className="logs-filter-note">Filters changed. Press Search to apply.</span>}
         </form>
       </Panel>
 
@@ -245,11 +268,26 @@ function normalizeFilters(filters) {
   );
 }
 
+function sameFilters(left, right) {
+  return JSON.stringify(normalizeFilters(left)) === JSON.stringify(normalizeFilters(right));
+}
+
+function buildLogQuery(filters, page) {
+  return {
+    ...serializeFilters(filters),
+    page,
+    limit: PAGE_SIZE,
+    sort: '@timestamp:desc'
+  };
+}
+
 function serializeFilters(filters) {
   const normalized = normalizeFilters(filters);
   const timeRange = resolveTimeRange(normalized);
-  return {
+  const out = {
     ...normalized,
+    q: '',
+    search_field: '',
     time_range: '',
     from_date: '',
     from_time: '',
@@ -258,6 +296,25 @@ function serializeFilters(filters) {
     from: timeRange.from,
     to: timeRange.to
   };
+  const searchValue = normalized.q;
+  if (searchValue) {
+    const searchField = normalized.search_field || 'path';
+    if (['trace_id', 'path', 'normalized_path', 'api_key_id', 'error_message'].includes(searchField)) {
+      out[searchField] = searchValue;
+    } else {
+      out.q = searchValue;
+    }
+  }
+  return out;
+}
+
+function searchPlaceholder(searchField) {
+  if (searchField === 'trace_id') return 'exact trace id...';
+  if (searchField === 'normalized_path') return 'exact normalized path...';
+  if (searchField === 'api_key_id') return 'exact API key id...';
+  if (searchField === 'error_message') return 'error text...';
+  if (searchField === 'q') return 'path, service, trace, error...';
+  return 'exact path, e.g. /api/dashboard';
 }
 
 function toIsoDateTime(dateValue, timeValue, fallbackTime) {
