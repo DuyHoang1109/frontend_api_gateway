@@ -1,6 +1,6 @@
 import React from 'react';
 import { Loader2, RefreshCcw, RotateCcw } from 'lucide-react';
-import { FeatureMatrix, Field, FormActions, InfoItem, Panel } from '../components/common.jsx';
+import { Field, FormActions, InfoItem, Panel } from '../components/common.jsx';
 import { getSavedBaseUrl, getSavedLogServiceBaseUrl } from '../api/gatewayAdminApi.js';
 
 export default function SettingsPage(props) {
@@ -52,10 +52,6 @@ export default function SettingsPage(props) {
             Reload cache
           </button>
         </div>
-      </Panel>
-
-      <Panel title="Backend modules to add next" eyebrow="roadmap">
-        <FeatureMatrix onlyMissing />
       </Panel>
     </section>
   );

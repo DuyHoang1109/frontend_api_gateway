@@ -1,12 +1,21 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Activity, AlertCircle, Cloud, Download, Filter, Gauge, GitFork, Globe2, RefreshCcw, ShieldCheck, Server } from 'lucide-react';
-import { EmptyState, Metric } from '../components/common.jsx';
+import { Activity, AlertCircle, Cloud, Download, Filter, Gauge, GitFork, Globe2, ShieldCheck, Server } from 'lucide-react';
+import { Alert, EmptyState, Metric } from '../components/common.jsx';
 
-export default function Dashboard({ api, services, instances, routes, health, ready, onNavigate }) {
+const METRIC_WINDOWS = [
+  { value: '60s', label: 'Last 60 seconds', shortLabel: '60s', interval: '5s' },
+  { value: '1h', label: 'Last 1 hour', shortLabel: '1h', interval: '5m', stream: false },
+  { value: '24h', label: 'Last 24 hours', shortLabel: '24h', interval: '1h', stream: false }
+];
+
+export default function Dashboard({ api, services, instances, routes, health, ready, onNavigate, showGatewayResources = true }) {
   const [snapshot, setSnapshot] = useState(null);
   const [requestLogs, setRequestLogs] = useState([]);
   const [streamStatus, setStreamStatus] = useState('connecting');
   const [streamError, setStreamError] = useState('');
+  const [exportMessage, setExportMessage] = useState('');
+  const [exportError, setExportError] = useState('');
+  const [metricWindow, setMetricWindow] = useState('24h');
 
   const activeServices = services.filter((item) => item.is_active).length;
   const activeInstances = instances.filter((item) => item.is_active).length;
@@ -15,6 +24,7 @@ export default function Dashboard({ api, services, instances, routes, health, re
   const recentLogs = requestLogs.length > 0 ? normalizeLogs(requestLogs) : buildRecentLogs(routes);
   const summary = snapshot?.summary || {};
   const rps = Array.isArray(snapshot?.rps) ? snapshot.rps : [];
+  const selectedMetricWindow = METRIC_WINDOWS.find((item) => item.value === metricWindow) || METRIC_WINDOWS[2];
 
   useEffect(() => {
     if (!api?.streamRealtimeMetrics && !api?.getRealtimeSnapshot) return undefined;
@@ -23,7 +33,9 @@ export default function Dashboard({ api, services, instances, routes, health, re
     let pollTimer = null;
     let stopped = false;
     let controller = null;
-    const realtimeParams = { window: '60s', interval: '1s', top_limit: 10 };
+    const realtimeParams = { window: selectedMetricWindow.value, interval: selectedMetricWindow.interval, top_limit: 10 };
+    const useRealtimeStream = selectedMetricWindow.stream !== false;
+    setSnapshot(null);
 
     const pollSnapshot = async () => {
       if (stopped || !api?.getRealtimeSnapshot) return;
@@ -31,7 +43,7 @@ export default function Dashboard({ api, services, instances, routes, health, re
         const payload = await api.getRealtimeSnapshot(realtimeParams);
         if (!stopped) {
           setSnapshot(payload);
-          setStreamStatus((current) => current === 'connected' ? current : 'polling');
+          setStreamStatus((current) => useRealtimeStream && current === 'connected' ? current : 'polling');
           setStreamError('');
         }
       } catch (error) {
@@ -44,6 +56,7 @@ export default function Dashboard({ api, services, instances, routes, health, re
 
     const startPolling = () => {
       if (pollTimer || !api?.getRealtimeSnapshot) return;
+      setStreamStatus('polling');
       pollSnapshot();
       pollTimer = window.setInterval(pollSnapshot, 2000);
     };
@@ -57,7 +70,7 @@ export default function Dashboard({ api, services, instances, routes, health, re
 
     const connect = () => {
       if (stopped) return;
-      if (!api?.streamRealtimeMetrics) {
+      if (!useRealtimeStream || !api?.streamRealtimeMetrics) {
         startPolling();
         return;
       }
@@ -103,7 +116,7 @@ export default function Dashboard({ api, services, instances, routes, health, re
       stopPolling();
       if (controller) controller.abort();
     };
-  }, [api]);
+  }, [api, selectedMetricWindow.value, selectedMetricWindow.interval, selectedMetricWindow.stream]);
 
   useEffect(() => {
     let ignore = false;
@@ -137,43 +150,81 @@ export default function Dashboard({ api, services, instances, routes, health, re
   }, [streamStatus]);
 
   function exportRecentLogs() {
-    const headers = ['Timestamp', 'Method', 'Path', 'Status', 'Latency'];
-    const rows = recentLogs.map((log) => [
-      log.timestamp,
-      log.method,
-      log.path,
-      log.status,
-      `${log.latency}ms`
-    ]);
-    const csv = [headers, ...rows]
-      .map((row) => row.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(','))
-      .join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `recent-api-logs-${new Date().toISOString().slice(0, 19).replaceAll(':', '-')}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    setExportMessage('');
+    setExportError('');
+    try {
+      const headers = ['Timestamp', 'Method', 'Path', 'Status', 'Latency'];
+      const rows = recentLogs.map((log) => [
+        log.timestamp,
+        log.method,
+        log.path,
+        log.status,
+        `${log.latency}ms`
+      ]);
+      const csv = [headers, ...rows]
+        .map((row) => row.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(','))
+        .join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `recent-api-logs-${new Date().toISOString().slice(0, 19).replaceAll(':', '-')}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setExportMessage('Recent logs exported');
+    } catch (error) {
+      setExportError(error.message || 'Cannot export recent logs');
+    }
   }
 
   return (
     <section className="dashboard-stack">
+      {(exportError || exportMessage) && (
+        <Alert
+          type={exportError ? 'error' : 'success'}
+          message={exportError || exportMessage}
+          onClose={() => {
+            setExportError('');
+            setExportMessage('');
+          }}
+        />
+      )}
+
       <div className="dashboard-kpi-grid">
-        <KpiCard title="Total Requests" subtitle="60s" value={formatNumber(summary.total_requests)} trend={streamDetail} trendTone={streamStatus === 'connected' || streamStatus === 'polling' ? 'up' : 'down'} note={streamError} icon={Globe2} />
+        <KpiCard
+          title="Total Requests"
+          subtitle={selectedMetricWindow.shortLabel}
+          value={formatNumber(summary.total_requests)}
+          trend={streamDetail}
+          trendTone={streamStatus === 'connected' || streamStatus === 'polling' ? 'up' : 'down'}
+          note={streamError}
+          icon={Globe2}
+          control={
+            <select
+              className="kpi-window-select"
+              value={metricWindow}
+              onChange={(event) => setMetricWindow(event.target.value)}
+              aria-label="Total request time window"
+            >
+              {METRIC_WINDOWS.map((item) => <option key={item.value} value={item.value}>{item.shortLabel}</option>)}
+            </select>
+          }
+        />
         <KpiCard title="Avg Latency" value={formatLatency(summary.avg_latency_ms)} unit="ms" trend={`p95 ${formatLatency(summary.p95_latency_ms)}ms`} trendTone={Number(summary.p95_latency_ms || 0) > 500 ? 'down' : 'up'} icon={Gauge} />
         <KpiCard title="Error Rate" value={formatPercent(summary.error_rate)} trend={`${formatNumber(summary.error_count)} errors`} trendTone={Number(summary.error_rate || 0) > 0.05 ? 'down' : 'up'} icon={AlertCircle} />
         <KpiCard title="System Health" value={systemHealth} trend={health ? 'All systems operational' : 'Gateway unavailable'} trendTone={health ? 'up' : 'down'} icon={ShieldCheck} />
       </div>
 
-      <section className="page-grid compact-metrics dashboard-resource-grid">
-        <Metric title="Services" value={services.length} detail={`${activeServices} active`} icon={Cloud} onClick={() => onNavigate('services')} />
-        <Metric title="Instances" value={instances.length} detail={`${activeInstances} active`} icon={Server} onClick={() => onNavigate('instances')} />
-        <Metric title="Routes" value={routes.length} detail={`${activeRoutes} active`} icon={GitFork} onClick={() => onNavigate('routes')} />
-        <Metric title="Health" value={health ? 'OK' : '-'} detail={ready ? 'ready endpoint online' : 'ready unknown'} icon={Activity} onClick={() => onNavigate('info')} />
-      </section>
+      {showGatewayResources && (
+        <section className="page-grid compact-metrics dashboard-resource-grid">
+          <Metric title="Services" value={services.length} detail={`${activeServices} active`} icon={Cloud} onClick={() => onNavigate('services')} />
+          <Metric title="Instances" value={instances.length} detail={`${activeInstances} active`} icon={Server} onClick={() => onNavigate('instances')} />
+          <Metric title="Routes" value={routes.length} detail={`${activeRoutes} active`} icon={GitFork} onClick={() => onNavigate('routes')} />
+          <Metric title="Health" value={health ? 'OK' : '-'} detail={ready ? 'ready endpoint online' : 'ready unknown'} icon={Activity} onClick={() => onNavigate('info')} />
+        </section>
+      )}
 
       <div className="dashboard-main-grid">
         <section className="panel traffic-panel">
@@ -182,38 +233,13 @@ export default function Dashboard({ api, services, instances, routes, health, re
               <p>Monitoring</p>
               <h2>Real-time Traffic</h2>
             </div>
-            <button className="tiny-button">Last 24 Hours</button>
+            <select className="tiny-select" value={metricWindow} onChange={(event) => setMetricWindow(event.target.value)} aria-label="Traffic time window">
+              {METRIC_WINDOWS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+            </select>
           </div>
-          <TrafficChart data={rps} />
+          <TrafficChart data={rps} windowLabel={selectedMetricWindow.shortLabel} />
         </section>
 
-        <section className="panel discovery-panel">
-          <div className="panel-title split-title">
-            <div>
-              <p>Registry</p>
-              <h2>Service Discovery</h2>
-            </div>
-            <button className="ghost-icon compact" title="Refresh services"><RefreshCcw size={14} /></button>
-          </div>
-
-          <div className="service-discovery-list">
-            {services.slice(0, 4).map((service) => {
-              const targets = instances.filter((instance) => instance.service_id === service.id);
-              const activeTargets = targets.filter((instance) => instance.is_active).length;
-              return (
-                <button className="service-discovery-item" key={service.id} onClick={() => onNavigate('services')}>
-                  <span className={service.is_active ? 'dot ok' : 'dot danger'} />
-                  <strong>{service.name}</strong>
-                  <small>{service.protocol || 'http'} / {service.lb_strategy}</small>
-                  <em>{activeTargets}/{targets.length || 0}<span>Instances</span></em>
-                </button>
-              );
-            })}
-            {services.length === 0 && <EmptyState text="No services found" />}
-          </div>
-
-          <button className="outline-wide-button" onClick={() => onNavigate('services')}>View All Services</button>
-        </section>
       </div>
 
       <div className="dashboard-bottom-grid">
@@ -254,32 +280,34 @@ export default function Dashboard({ api, services, instances, routes, health, re
           {recentLogs.length === 0 && <EmptyState text="No API logs yet" />}
         </section>
 
-        <section className="panel route-overview-panel">
-          <div className="panel-title split-title">
-            <div>
-              <p>Runtime Map</p>
-              <h2>Route to service overview</h2>
-            </div>
-            <button className="tiny-button" onClick={() => onNavigate('routes')}>Manage Routes</button>
-          </div>
-          <div className="route-map">
-            {routes.length === 0 ? (
-              <EmptyState text="No routes found" />
-            ) : routes.slice(0, 8).map((route) => (
-              <div className="route-map-row" key={route.id}>
-                <span className="method">{route.method}</span>
-                <strong>{route.path}</strong>
-                <span>{route.service_id}</span>
+        {showGatewayResources && (
+          <section className="panel route-overview-panel">
+            <div className="panel-title split-title">
+              <div>
+                <p>Runtime Map</p>
+                <h2>Route to service overview</h2>
               </div>
-            ))}
-          </div>
-        </section>
+              <button className="tiny-button" onClick={() => onNavigate('routes')}>Manage Routes</button>
+            </div>
+            <div className="route-map">
+              {routes.length === 0 ? (
+                <EmptyState text="No routes found" />
+              ) : routes.slice(0, 8).map((route) => (
+                <div className="route-map-row" key={route.id}>
+                  <span className="method">{route.method}</span>
+                  <strong>{route.path}</strong>
+                  <span>{route.service_id}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </section>
   );
 }
 
-function KpiCard({ title, subtitle, value, unit, trend, trendTone, note, icon: Icon }) {
+function KpiCard({ title, subtitle, value, unit, trend, trendTone, note, icon: Icon, control }) {
   return (
     <section className="kpi-card">
       <div className="kpi-head">
@@ -287,7 +315,7 @@ function KpiCard({ title, subtitle, value, unit, trend, trendTone, note, icon: I
           <span>{title}</span>
           {subtitle && <small>({subtitle})</small>}
         </div>
-        <Icon size={16} />
+        {control || <Icon size={16} />}
       </div>
       <strong>{value}{unit && <em>{unit}</em>}</strong>
       {trend && (
@@ -300,13 +328,13 @@ function KpiCard({ title, subtitle, value, unit, trend, trendTone, note, icon: I
   );
 }
 
-function TrafficChart({ data = [] }) {
+function TrafficChart({ data = [], windowLabel = '60s' }) {
   const safeData = Array.isArray(data) ? data : [];
   const points = chartPoints(safeData);
   const linePath = pointsToLinePath(points);
   const areaPath = `${linePath} L640 250 L0 250 Z`;
   const maxRequests = Math.max(...safeData.map((item) => Number(item.requests || 0)), 1);
-  const labels = chartLabels(safeData);
+  const labels = chartLabels(safeData, windowLabel);
 
   return (
     <div className="traffic-chart">
@@ -383,8 +411,8 @@ function pointsToLinePath(points) {
   return points.map(([x, y], index) => `${index === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
 }
 
-function chartLabels(data) {
-  if (data.length < 2) return ['now-60s', 'now'];
+function chartLabels(data, windowLabel) {
+  if (data.length < 2) return [`now-${windowLabel}`, 'now'];
   const first = formatChartTime(data[0].timestamp);
   const middle = formatChartTime(data[Math.floor(data.length / 2)].timestamp);
   const last = formatChartTime(data[data.length - 1].timestamp);
@@ -399,16 +427,7 @@ function formatChartTime(value) {
 }
 
 function buildRecentLogs(routes) {
-  const fallbackRoutes = [
-    { method: 'GET', path: '/api/products', is_active: true },
-    { method: 'POST', path: '/api/auth/login', is_active: true },
-    { method: 'GET', path: '/api/product/2', is_active: true },
-    { method: 'DELETE', path: '/api/order/123', is_active: false },
-    { method: 'PUT', path: '/api/user/profile', is_active: true }
-  ];
-
-  const source = routes.length > 0 ? routes : fallbackRoutes;
-  return source.slice(0, 5).map((route, index) => {
+  return routes.slice(0, 5).map((route, index) => {
     const status = route.is_active === false ? 500 : index === 2 ? 404 : index === 1 ? 201 : 200;
     return {
       timestamp: `2026-06-26 0${index + 8}:3${index}:1${index}`,

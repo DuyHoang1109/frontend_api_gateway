@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Loader2, LogIn, LogOut, RefreshCcw, Search, UserCircle } from 'lucide-react';
+import { Loader2, LogIn, LogOut, Network, RefreshCcw, Search, UserCircle } from 'lucide-react';
 import {
   clearAuthTokens,
   createGatewayAdminApi,
@@ -12,7 +12,7 @@ import {
   saveLogServiceBaseUrl,
   saveRefreshToken
 } from './api/gatewayAdminApi.js';
-import { backendFeatureStatus, sections, standaloneFeaturePages } from './config/navigation.jsx';
+import { sections } from './config/navigation.jsx';
 import {
   defaultInstanceForm,
   defaultRouteForm,
@@ -22,6 +22,7 @@ import {
   servicePayload
 } from './utils/forms.js';
 import { filterRows } from './utils/filterRows.js';
+import { scrollToUpdateForm } from './utils/scrollToUpdateForm.js';
 import { Alert, DetailModal, StatusPill } from './components/common.jsx';
 import ConnectionsPage from './pages/ConnectionsPage.jsx';
 import AggregationsPage from './pages/AggregationsPage.jsx';
@@ -33,7 +34,6 @@ import HealthChecksPage from './pages/HealthChecksPage.jsx';
 import InfoPage from './pages/InfoPage.jsx';
 import IPBlacklistPage from './pages/IPBlacklistPage.jsx';
 import InstancesPage from './pages/InstancesPage.jsx';
-import KongaFeaturePage from './pages/KongaFeaturePage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import LogsPage from './pages/LogsPage.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
@@ -49,6 +49,28 @@ import UsersPage from './pages/UsersPage.jsx';
 const PAGE_SIZE = 5;
 const PAGINATED_SECTIONS = new Set(['services', 'instances', 'routes']);
 const LAST_SECTION_KEY = 'gateway_admin_last_section';
+const SECTION_PERMISSIONS = {
+  dashboard: ['logs:read', 'metrics:read'],
+  logs: ['logs:read'],
+  healthchecks: ['health:write'],
+  info: ['services:read'],
+  services: ['services:read'],
+  instances: ['services:write'],
+  routes: ['routes:read'],
+  upstreams: ['services:write'],
+  'api-keys': ['api_keys:read'],
+  consumers: ['clients:read'],
+  'rate-limits': ['rate_limits:read'],
+  'cors-policies': ['cors_policies:read'],
+  security: ['ip_blacklist:read'],
+  roles: ['roles:read'],
+  permissions: ['permissions:read'],
+  users: ['users:read'],
+  aggregation: ['aggregations:read'],
+  connections: ['cache:reload'],
+  settings: ['cache:reload'],
+  profile: []
+};
 
 export default function App() {
   const [activeSection, setActiveSection] = useState(() => getInitialSection());
@@ -95,13 +117,16 @@ export default function App() {
     setError('');
 
     try {
+      const canReadServices = canUsePermission(authUser, 'services:read');
+      const canReadRoutes = canUsePermission(authUser, 'routes:read');
+      const canReadCache = canUsePermission(authUser, 'cache:reload');
       const [healthResult, readyResult, servicesResult, instancesResult, routesResult, cacheResult] = await Promise.allSettled([
         api.health(),
         api.ready(),
-        api.listServices(),
-        api.listInstances(),
-        api.listRoutes(),
-        api.getCacheVersion()
+        canReadServices ? api.listServices() : Promise.resolve([]),
+        canReadServices ? api.listInstances() : Promise.resolve([]),
+        canReadRoutes ? api.listRoutes() : Promise.resolve([]),
+        canReadCache ? api.getCacheVersion() : Promise.resolve(null)
       ]);
 
       if (healthResult.status === 'fulfilled') setHealth(healthResult.value);
@@ -111,13 +136,24 @@ export default function App() {
       if (routesResult.status === 'fulfilled') setRoutes(routesResult.value);
       if (cacheResult.status === 'fulfilled') setCacheStatus(cacheResult.value);
 
-      const rejected = [servicesResult, instancesResult, routesResult].find((item) => item.status === 'rejected');
+      const rejected = [
+        canReadServices ? servicesResult : null,
+        canReadServices ? instancesResult : null,
+        canReadRoutes ? routesResult : null
+      ].filter(Boolean).find((item) => item.status === 'rejected');
       if (rejected) throw rejected.reason;
+      return true;
     } catch (err) {
       setError(err.message || 'Cannot connect to gateway');
+      return false;
     } finally {
       setLoading(false);
     }
+  }
+
+  async function refreshAll() {
+    const refreshed = await loadAll();
+    if (refreshed) setNotice('Dashboard data refreshed');
   }
 
   useEffect(() => {
@@ -134,6 +170,14 @@ export default function App() {
 
   useEffect(() => {
     if (!authUser) return;
+    if (activeSection === 'login') {
+      setActiveSection('dashboard');
+      return;
+    }
+    if (!canAccessSection(activeSection, authUser)) {
+      setActiveSection(defaultSectionForUser(authUser));
+      return;
+    }
     persistLocation(activeSection, pages[activeSection] || 1);
   }, [activeSection, authUser, pages]);
 
@@ -194,6 +238,11 @@ export default function App() {
       setError('');
       setNotice('');
       setActiveSection('login');
+      return;
+    }
+    if (authUser && !canAccessSection(sectionId, authUser)) {
+      setError('You do not have permission to access this section');
+      setActiveSection(defaultSectionForUser(authUser));
       return;
     }
 
@@ -279,9 +328,15 @@ export default function App() {
       }));
       setServiceHealth(Object.fromEntries(serviceEntries));
       setInstanceHealth(Object.fromEntries(instanceEntries));
+      return true;
     } finally {
       setHealthLoading(false);
     }
+  }
+
+  async function refreshDetailedHealth() {
+    await loadDetailedHealth();
+    setNotice('Health status refreshed');
   }
 
   async function checkInstanceHealth(instanceId) {
@@ -301,9 +356,16 @@ export default function App() {
   async function loadCacheVersion() {
     try {
       setCacheStatus(await api.getCacheVersion());
+      return true;
     } catch (err) {
       setError(err.message || 'Cannot load cache version');
+      return false;
     }
+  }
+
+  async function refreshCacheVersion() {
+    const refreshed = await loadCacheVersion();
+    if (refreshed) setNotice('Cache version refreshed');
   }
 
   async function reloadCache() {
@@ -411,12 +473,14 @@ export default function App() {
     setActiveSection('services');
     setEditing({ type: 'service', id: service.id });
     setServiceForm({ ...defaultServiceForm, ...service, description: service.description || '' });
+    scrollToUpdateForm();
   }
 
   function editInstance(instance) {
     setActiveSection('instances');
     setEditing({ type: 'instance', id: instance.id });
     setInstanceForm({ ...defaultInstanceForm, ...instance });
+    scrollToUpdateForm();
   }
 
   function editRoute(route) {
@@ -429,6 +493,7 @@ export default function App() {
       rate_limit_id: route.rate_limit_id || '',
       cors_policy_id: route.cors_policy_id || ''
     });
+    scrollToUpdateForm();
   }
 
   function resetForms() {
@@ -437,7 +502,6 @@ export default function App() {
     setInstanceForm(defaultInstanceForm);
     setRouteForm(defaultRouteForm);
     setError('');
-    setNotice('');
   }
 
   const filteredServices = filterRows(services, search);
@@ -447,7 +511,7 @@ export default function App() {
   const instancePage = pageSlice(filteredInstances, pages.instances, PAGE_SIZE);
   const routePage = pageSlice(filteredRoutes, pages.routes, PAGE_SIZE);
   const isAuthenticated = Boolean(authUser);
-  const visibleSections = isAuthenticated ? sections : sections.filter((section) => section.id === 'login');
+  const visibleSections = isAuthenticated ? sections.filter((section) => section.id !== 'login' && canAccessSection(section.id, authUser)) : sections.filter((section) => section.id === 'login');
   const searchableSections = {
     services: 'Search services...',
     instances: 'Search instances...',
@@ -505,13 +569,13 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark">GW</div>
+        <button className="brand" type="button" onClick={() => navigate('dashboard')} title="Go to dashboard">
+          <div className="brand-mark" aria-hidden="true"><Network size={25} strokeWidth={2.5} /></div>
           <div>
             <strong>Gateway Admin</strong>
             <span>Control Plane</span>
           </div>
-        </div>
+        </button>
 
         <nav className="nav-list">
           {visibleSections.map((section, index) => {
@@ -537,13 +601,13 @@ export default function App() {
 
       <main className="workspace">
         <header className="topbar">
-          <div>
+          <div className="page-heading">
             <p>API Gateway</p>
             <h1>{sections.find((section) => section.id === activeSection)?.label}</h1>
           </div>
           <div className="topbar-actions">
             <StatusPill active={Boolean(health)} label={health ? 'Gateway reachable' : 'Gateway unknown'} />
-            <button className="ghost-button" type="button" onClick={loadAll} title="Refresh dashboard data">
+            <button className="ghost-button" type="button" onClick={refreshAll} title="Refresh dashboard data">
               {loading ? <Loader2 className="spin" size={18} /> : <RefreshCcw size={18} />}
               Refresh
             </button>
@@ -644,6 +708,7 @@ export default function App() {
             health={health}
             ready={ready}
             onNavigate={navigate}
+            showGatewayResources={canAccessSection('services', authUser)}
           />
         )}
 
@@ -673,6 +738,7 @@ export default function App() {
             routeCount={routeCount}
             serviceHealth={serviceHealth}
             healthLoading={healthLoading}
+            canWrite={canUsePermission(authUser, 'services:write')}
             page={servicePage.page}
             pageSize={PAGE_SIZE}
             totalItems={filteredServices.length}
@@ -693,6 +759,7 @@ export default function App() {
             onDelete={(instance) => removeRecord('instance', instance.id, `${instance.host}:${instance.port}`)}
             onInspect={(instance) => inspectRecord('instance', instance.id)}
             serviceName={serviceName}
+            canWrite={canUsePermission(authUser, 'services:write')}
             page={instancePage.page}
             pageSize={PAGE_SIZE}
             totalItems={filteredInstances.length}
@@ -714,6 +781,10 @@ export default function App() {
             onDelete={(route) => removeRecord('route', route.id, `${route.method} ${route.path}`)}
             onInspect={(route) => inspectRecord('route', route.id)}
             serviceName={serviceName}
+            canWrite={canUsePermission(authUser, 'routes:write')}
+            canReadRateLimits={canUsePermission(authUser, 'rate_limits:read')}
+            canReadApiKeys={canUsePermission(authUser, 'api_keys:read')}
+            canReadCorsPolicies={canUsePermission(authUser, 'cors_policies:read')}
             page={routePage.page}
             pageSize={PAGE_SIZE}
             totalItems={filteredRoutes.length}
@@ -749,7 +820,7 @@ export default function App() {
         )}
 
         {isAuthenticated && activeSection === 'rate-limits' && (
-          <RateLimitsPage api={api} />
+          <RateLimitsPage api={api} currentUser={authUser} />
         )}
 
         {isAuthenticated && activeSection === 'cors-policies' && (
@@ -770,6 +841,7 @@ export default function App() {
             instances={filteredInstances}
             serviceName={serviceName}
             onNavigate={navigate}
+            canWriteInstances={canUsePermission(authUser, 'services:write')}
           />
         )}
 
@@ -784,13 +856,14 @@ export default function App() {
             instanceHealth={instanceHealth}
             loading={healthLoading}
             checkingInstanceId={checkingInstanceId}
-            onReload={loadDetailedHealth}
+            onReload={refreshDetailedHealth}
             onCheckInstance={checkInstanceHealth}
+            canRunInstanceCheck={canUsePermission(authUser, 'health:write')}
           />
         )}
 
         {isAuthenticated && activeSection === 'logs' && (
-          <LogsPage api={api} />
+          <LogsPage api={api} services={services} />
         )}
 
         {isAuthenticated && activeSection === 'connections' && (
@@ -817,18 +890,8 @@ export default function App() {
             routes={routes}
             cacheStatus={cacheStatus}
             cacheLoading={cacheLoading}
-            onRefreshCache={loadCacheVersion}
+            onRefreshCache={refreshCacheVersion}
             onReloadCache={reloadCache}
-          />
-        )}
-
-        {isAuthenticated && backendFeatureStatus[activeSection] && !standaloneFeaturePages.includes(activeSection) && (
-          <KongaFeaturePage
-            feature={backendFeatureStatus[activeSection]}
-            services={services}
-            routes={routes}
-            instances={instances}
-            onNavigate={navigate}
           />
         )}
       </main>
@@ -875,6 +938,32 @@ function persistLocation(section, page) {
   if (PAGINATED_SECTIONS.has(section)) params.set('page', String(page));
   else params.delete('page');
   window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+}
+
+function canAccessSection(sectionId, user) {
+  if (sectionId === 'login') return !user;
+  if (!user) return false;
+  if (isAdminUser(user)) return true;
+  const required = SECTION_PERMISSIONS[sectionId];
+  if (!required) return false;
+  if (required.length === 0) return true;
+  return required.some((permission) => canUsePermission(user, permission));
+}
+
+function canUsePermission(user, permission) {
+  if (!user) return false;
+  if (isAdminUser(user)) return true;
+  return Array.isArray(user.permissions) && user.permissions.some((item) => String(item).toLowerCase() === permission.toLowerCase());
+}
+
+function isAdminUser(user) {
+  return String(user?.role || user?.role_name || '').trim().toLowerCase() === 'admin';
+}
+
+function defaultSectionForUser(user) {
+  if (canAccessSection('dashboard', user)) return 'dashboard';
+  if (canAccessSection('logs', user)) return 'logs';
+  return 'profile';
 }
 
 function getSearchSuggestions(section, data, term) {

@@ -2,12 +2,12 @@ import React from 'react';
 import { Server } from 'lucide-react';
 import { EmptyState, Panel, StatusPill } from '../components/common.jsx';
 
-export default function UpstreamsPage({ services, instances, serviceName, onNavigate }) {
+export default function UpstreamsPage({ services, instances, serviceName, onNavigate, canWriteInstances = false }) {
   return (
     <section className="content-stack">
       <Panel title="Upstreams mapped to service instances" eyebrow="GET /admin/instances">
         <p className="panel-copy">
-          In Konga, upstreams and targets group backend instances for load balancing. In GW_v1, the closest model is service_instances.
+          Upstreams are represented by active service instances used for gateway load balancing.
         </p>
         <table className="data-table">
           <thead>
@@ -33,7 +33,7 @@ export default function UpstreamsPage({ services, instances, serviceName, onNavi
         <div className="linked-actions">
           <button className="primary-button" onClick={() => onNavigate('instances')}>
             <Server size={17} />
-            Manage instances
+            {canWriteInstances ? 'Manage instances' : 'View instances'}
           </button>
         </div>
       </Panel>

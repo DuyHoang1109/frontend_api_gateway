@@ -9,10 +9,25 @@ const initialFilters = {
   method: '',
   status_class: '',
   status_code: '',
-  client_ip: ''
+  client_ip: '',
+  time_range: '',
+  from_date: '',
+  from_time: '',
+  to_date: '',
+  to_time: ''
 };
 
-export default function LogsPage({ api }) {
+const timeRangeOptions = [
+  { value: '15m', label: 'Last 15 minutes' },
+  { value: '1h', label: 'Last 1 hour' },
+  { value: '24h', label: 'Last 24 hours' },
+  { value: '7d', label: 'Last 7 days' },
+  { value: 'custom', label: 'Custom range' }
+];
+
+const timeOptions = buildTimeOptions();
+
+export default function LogsPage({ api, services = [] }) {
   const [logs, setLogs] = useState([]);
   const [filters, setFilters] = useState(initialFilters);
   const [appliedFilters, setAppliedFilters] = useState(initialFilters);
@@ -22,8 +37,14 @@ export default function LogsPage({ api }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const serviceOptions = useMemo(() => services
+    .map((service) => service.name || service.service_name || service.id)
+    .filter(Boolean)
+    .sort((left, right) => left.localeCompare(right))
+    .map((name) => ({ value: name, label: name })), [services]);
+
   const query = useMemo(() => ({
-    ...appliedFilters,
+    ...serializeFilters(appliedFilters),
     page,
     limit: PAGE_SIZE,
     sort: '@timestamp:desc'
@@ -56,9 +77,14 @@ export default function LogsPage({ api }) {
       setError(validationError);
       return;
     }
+    const timeError = validateTimeFilters(filters);
+    if (timeError) {
+      setError(timeError);
+      return;
+    }
     setError('');
     setPage(1);
-    setAppliedFilters(filters);
+    setAppliedFilters(normalizeFilters(filters));
   }
 
   function clearFilters() {
@@ -84,6 +110,26 @@ export default function LogsPage({ api }) {
     }));
   }
 
+  function updateTimeRange(timeRange) {
+    setFilters((current) => ({
+      ...current,
+      time_range: timeRange,
+      from_date: timeRange === 'custom' ? current.from_date : '',
+      from_time: timeRange === 'custom' ? current.from_time : '',
+      to_date: timeRange === 'custom' ? current.to_date : '',
+      to_time: timeRange === 'custom' ? current.to_time : ''
+    }));
+  }
+
+  function updateCustomTimeField(field, value) {
+    setFilters((current) => ({
+      ...current,
+      [field]: value,
+      ...(field === 'from_date' && value && !current.from_time ? { from_time: '00:00' } : {}),
+      ...(field === 'to_date' && value && !current.to_time ? { to_time: '23:00' } : {})
+    }));
+  }
+
   return (
     <section className="content-stack">
       {error && <Alert type="error" message={error} onClose={() => setError('')} />}
@@ -91,15 +137,48 @@ export default function LogsPage({ api }) {
       <Panel title="Request logs" eyebrow="GET /admin/logs" className="request-logs-panel">
         <form className="form-grid logs-filter-form" onSubmit={applyFilters}>
           <Field label="Search" value={filters.q} onChange={(value) => setFilters({ ...filters, q: value })} placeholder="trace, path, error..." />
-          <Field label="Service" value={filters.service_name} onChange={(value) => setFilters({ ...filters, service_name: value })} placeholder="order-service" />
+          <SelectField label="Service" value={filters.service_name} onChange={(value) => setFilters({ ...filters, service_name: value })} options={serviceOptions} placeholder="All services" />
           <SelectField label="Method" value={filters.method} onChange={(value) => setFilters({ ...filters, method: value })} options={['GET', 'POST', 'PUT', 'PATCH', 'DELETE']} />
           <SelectField label="Status class" value={filters.status_class} onChange={updateStatusClass} options={['2xx', '3xx', '4xx', '5xx']} />
           <Field label="Status code" value={filters.status_code} onChange={updateStatusCode} placeholder="200" />
           <Field label="Client IP" value={filters.client_ip} onChange={(value) => setFilters({ ...filters, client_ip: value })} placeholder="127.0.0.1" />
+          <SelectField label="Time" value={filters.time_range} onChange={updateTimeRange} options={timeRangeOptions} placeholder="All time" />
+          {filters.time_range === 'custom' && (
+            <div className="logs-custom-range">
+              <div className="range-card">
+                <span>From</span>
+                <label>
+                  Date
+                  <input type="date" value={filters.from_date} onChange={(event) => updateCustomTimeField('from_date', event.target.value)} />
+                </label>
+                <label>
+                  Time
+                  <select value={filters.from_time} onChange={(event) => updateCustomTimeField('from_time', event.target.value)}>
+                    <option value="">Time...</option>
+                    {timeOptions.map((time) => <option key={`from-${time}`} value={time}>{time}</option>)}
+                  </select>
+                </label>
+              </div>
+              <div className="range-card">
+                <span>To</span>
+                <label>
+                  Date
+                  <input type="date" value={filters.to_date} onChange={(event) => updateCustomTimeField('to_date', event.target.value)} />
+                </label>
+                <label>
+                  Time
+                  <select value={filters.to_time} onChange={(event) => updateCustomTimeField('to_time', event.target.value)}>
+                    <option value="">Time...</option>
+                    {timeOptions.map((time) => <option key={`to-${time}`} value={time}>{time}</option>)}
+                  </select>
+                </label>
+              </div>
+            </div>
+          )}
           <div className="form-actions logs-actions">
             <button className="primary-button" type="submit"><Search size={17} />Search</button>
             <button className="icon-button" type="button" onClick={loadLogs} title="Reload logs"><RefreshCw className={loading ? 'spin' : ''} size={17} /></button>
-            <button className="ghost-button" type="button" onClick={clearFilters}><X size={17} />Clear</button>
+            <button className="ghost-button cancel-button" type="button" onClick={clearFilters}><X size={17} />Cancel</button>
           </div>
         </form>
       </Panel>
@@ -160,6 +239,67 @@ function statusCodeMatchesClass(statusCode, statusClass) {
   return statusClassForCode(statusCode) === statusClass;
 }
 
+function normalizeFilters(filters) {
+  return Object.fromEntries(
+    Object.entries(filters).map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value])
+  );
+}
+
+function serializeFilters(filters) {
+  const normalized = normalizeFilters(filters);
+  const timeRange = resolveTimeRange(normalized);
+  return {
+    ...normalized,
+    time_range: '',
+    from_date: '',
+    from_time: '',
+    to_date: '',
+    to_time: '',
+    from: timeRange.from,
+    to: timeRange.to
+  };
+}
+
+function toIsoDateTime(dateValue, timeValue, fallbackTime) {
+  if (!dateValue) return '';
+  const date = new Date(`${dateValue}T${timeValue || fallbackTime}:00`);
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString();
+}
+
+function resolveTimeRange(filters) {
+  if (!filters.time_range || filters.time_range === 'custom') {
+    return {
+      from: toIsoDateTime(filters.from_date, filters.from_time, '00:00'),
+      to: toIsoDateTime(filters.to_date, filters.to_time, '23:59')
+    };
+  }
+
+  const now = new Date();
+  const from = new Date(now.getTime() - timeRangeToMilliseconds(filters.time_range));
+  return {
+    from: from.toISOString(),
+    to: now.toISOString()
+  };
+}
+
+function timeRangeToMilliseconds(timeRange) {
+  const amount = Number(timeRange.slice(0, -1));
+  const unit = timeRange.slice(-1);
+  if (!amount) return 0;
+  if (unit === 'm') return amount * 60 * 1000;
+  if (unit === 'h') return amount * 60 * 60 * 1000;
+  if (unit === 'd') return amount * 24 * 60 * 60 * 1000;
+  return 0;
+}
+
+function buildTimeOptions() {
+  const options = [];
+  for (let hour = 0; hour < 24; hour += 1) {
+    options.push(`${String(hour).padStart(2, '0')}:00`);
+  }
+  return options;
+}
+
 function validateStatusFilters(filters) {
   const statusCode = filters.status_code.trim();
   if (!statusCode) return '';
@@ -169,5 +309,17 @@ function validateStatusFilters(filters) {
   if (filters.status_class && filters.status_class !== statusClass) {
     return `Status code ${statusCode} belongs to ${statusClass}, not ${filters.status_class}.`;
   }
+  return '';
+}
+
+function validateTimeFilters(filters) {
+  if (filters.time_range !== 'custom') return '';
+  const hasAnyValue = filters.from_date || filters.from_time || filters.to_date || filters.to_time;
+  if (!hasAnyValue) return '';
+  if (!filters.from_date || !filters.to_date) return 'Custom range needs both From date and To date.';
+  const from = new Date(`${filters.from_date}T${filters.from_time || '00:00'}:00`);
+  const to = new Date(`${filters.to_date}T${filters.to_time || '23:59'}:00`);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return 'Time filters are invalid.';
+  if (from > to) return 'From time must be before To time.';
   return '';
 }

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Database, Edit3, Eye, EyeOff, RefreshCw, Trash2, X } from 'lucide-react';
+import { Database, Edit3, Eye, EyeOff, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { Alert, EmptyState, Pagination, Panel, StatusPill } from '../components/common.jsx';
 
 const PAGE_SIZE = 10;
@@ -8,6 +8,7 @@ export default function UsersPage({ api, currentUser }) {
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(defaultForm);
   const [search, setSearch] = useState('');
@@ -30,6 +31,7 @@ export default function UsersPage({ api, currentUser }) {
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const visibleUsers = filteredUsers.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const creatableRoles = roles.filter((role) => !isAdminRole(role));
 
   async function loadUsers() {
     setLoading(true);
@@ -59,6 +61,7 @@ export default function UsersPage({ api, currentUser }) {
 
   function edit(user) {
     setSelected(null);
+    setCreating(false);
     setEditing(user);
     setForm({
       username: user.username || '',
@@ -70,9 +73,16 @@ export default function UsersPage({ api, currentUser }) {
     });
   }
 
+  function startCreate() {
+    setSelected(null);
+    setEditing(null);
+    setForm({ ...defaultForm, role_id: creatableRoles[0]?.id || '' });
+    setCreating(true);
+  }
+
   async function submit(event) {
     event.preventDefault();
-    if (!editing) return;
+    if (!editing && !creating) return;
 
     setSaving(true);
     setError('');
@@ -85,7 +95,7 @@ export default function UsersPage({ api, currentUser }) {
       };
       const password = form.password.trim();
       const passwordConfirm = form.password_confirm.trim();
-      if (password || passwordConfirm) {
+      if (creating || password || passwordConfirm) {
         const passwordError = validatePassword(password);
         if (passwordError) {
           setError(passwordError);
@@ -97,9 +107,15 @@ export default function UsersPage({ api, currentUser }) {
         }
         payload.password = password;
       }
-      await api.updateUser(editing.id, payload);
-      setNotice('User updated');
+      if (creating) {
+        await api.createUser(payload);
+        setNotice('User created');
+      } else {
+        await api.updateUser(editing.id, payload);
+        setNotice('User updated');
+      }
       setEditing(null);
+      setCreating(false);
       setForm(defaultForm);
       await loadUsers();
     } catch (err) {
@@ -135,6 +151,10 @@ export default function UsersPage({ api, currentUser }) {
             onChange={(event) => { setSearch(event.target.value); setPage(1); }}
             placeholder="Search username, email or role..."
           />
+          <button className="primary-button" type="button" onClick={startCreate} disabled={creatableRoles.length === 0}>
+            <Plus size={17} />
+            Create user
+          </button>
           <button className="icon-button" type="button" onClick={loadUsers} title="Reload users">
             <RefreshCw className={loading ? 'spin' : ''} size={17} />
           </button>
@@ -171,16 +191,17 @@ export default function UsersPage({ api, currentUser }) {
       </Panel>
 
       {selected && <UserDetail user={selected} onClose={() => setSelected(null)} />}
-      {editing && (
+      {(creating || editing) && (
         <UserEditModal
           user={editing}
           form={form}
           setForm={setForm}
-          roles={roles}
+          roles={creating ? creatableRoles : rolesForUserForm(editing, roles)}
           saving={saving}
-          isSelf={currentUser?.id === editing.id}
+          isCreate={creating}
+          isSelf={Boolean(editing && currentUser?.id === editing.id)}
           onSubmit={submit}
-          onClose={() => { setEditing(null); setForm(defaultForm); }}
+          onClose={() => { setCreating(false); setEditing(null); setForm(defaultForm); }}
         />
       )}
     </section>
@@ -219,10 +240,10 @@ function UserDetail({ user, onClose }) {
   );
 }
 
-function UserEditModal({ user, form, setForm, roles, saving, isSelf, onSubmit, onClose }) {
+function UserEditModal({ user, form, setForm, roles, saving, isCreate, isSelf, onSubmit, onClose }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
-  const [changingPassword, setChangingPassword] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(isCreate);
 
   function togglePasswordChange() {
     setChangingPassword((current) => {
@@ -240,7 +261,7 @@ function UserEditModal({ user, form, setForm, roles, saving, isSelf, onSubmit, o
     <div className="modal-backdrop" onClick={onClose}>
       <section className="detail-modal authorization-detail user-edit-modal" onClick={(event) => event.stopPropagation()}>
         <div className="modal-head">
-          <div><small>Update user</small><h2>{user.username}</h2></div>
+          <div><small>{isCreate ? 'Create user' : 'Update user'}</small><h2>{isCreate ? 'New user' : user.username}</h2></div>
           <button className="icon-button" type="button" onClick={onClose} title="Close"><X size={18} /></button>
         </div>
         <form className="form-grid user-edit-form" onSubmit={onSubmit}>
@@ -260,15 +281,17 @@ function UserEditModal({ user, form, setForm, roles, saving, isSelf, onSubmit, o
             </select>
           </label>
           <div className="password-change-panel field-wide">
-            <button className="ghost-button" type="button" onClick={togglePasswordChange}>
-              {changingPassword ? 'Keep current password' : 'Change password'}
-            </button>
+            {!isCreate && (
+              <button className="ghost-button" type="button" onClick={togglePasswordChange}>
+                {changingPassword ? 'Keep current password' : 'Change password'}
+              </button>
+            )}
             {changingPassword && (
               <div className="password-change-fields">
                 <label className="field">
-                  <span>New password</span>
+                  <span>{isCreate ? 'Password' : 'New password'}</span>
                   <div className="password-input">
-                    <input type={showPassword ? 'text' : 'password'} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="New password" minLength={6} required />
+                    <input type={showPassword ? 'text' : 'password'} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder={isCreate ? 'Password' : 'New password'} minLength={6} required />
                     <button className="password-toggle" type="button" onClick={() => setShowPassword((value) => !value)} title={showPassword ? 'Hide password' : 'Show password'}>
                       {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
@@ -292,8 +315,8 @@ function UserEditModal({ user, form, setForm, roles, saving, isSelf, onSubmit, o
             <span>Active</span>
           </label>
           <div className="form-actions field-wide user-edit-actions">
-            <button className="primary-button" type="submit" disabled={saving}>{saving ? 'Saving...' : 'Update'}</button>
-            <button className="ghost-button" type="button" onClick={onClose}>Cancel</button>
+            <button className="primary-button" type="submit" disabled={saving}>{saving ? 'Saving...' : isCreate ? 'Create' : 'Update'}</button>
+            <button className="ghost-button cancel-button" type="button" onClick={onClose}>Cancel</button>
           </div>
         </form>
       </section>
@@ -303,6 +326,17 @@ function UserEditModal({ user, form, setForm, roles, saving, isSelf, onSubmit, o
 
 function DetailItem({ label, value, wide = false }) {
   return <div className={`detail-item ${wide ? 'wide' : ''}`}><span>{label}</span><strong>{value || '-'}</strong></div>;
+}
+
+function rolesForUserForm(user, roles) {
+  if (!user || !isAdminRole({ name: user.role_name })) {
+    return roles.filter((role) => !isAdminRole(role));
+  }
+  return roles;
+}
+
+function isAdminRole(role) {
+  return String(role?.name || '').trim().toLowerCase() === 'admin';
 }
 
 function validatePassword(password) {

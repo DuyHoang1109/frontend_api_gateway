@@ -1,8 +1,6 @@
 import React from 'react';
 import { Field, FormActions, Panel } from '../components/common.jsx';
-import { backendFeatureStatus } from '../config/navigation.jsx';
 import { getSavedBaseUrl, getSavedLogServiceBaseUrl } from '../api/gatewayAdminApi.js';
-import KongaFeaturePage from './KongaFeaturePage.jsx';
 
 export default function ConnectionsPage({ baseUrl, setBaseUrl, onSave, logServiceBaseUrl, setLogServiceBaseUrl, onSaveLogService }) {
   return (
@@ -17,8 +15,6 @@ export default function ConnectionsPage({ baseUrl, setBaseUrl, onSave, logServic
           <FormActions editing={true} onCancel={() => setLogServiceBaseUrl(getSavedLogServiceBaseUrl())} />
         </form>
       </Panel>
-
-      <KongaFeaturePage feature={backendFeatureStatus.connections} />
     </section>
   );
 }

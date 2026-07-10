@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Ban, Copy, Database, Edit3, KeyRound, Play, RefreshCw, X } from 'lucide-react';
 import { Alert, DetailModal, EmptyState, Field, Pagination, Panel, SelectField, StatusPill, Toggle } from '../components/common.jsx';
 import { normalizeBaseUrl } from '../api/storage.js';
+import { scrollToUpdateForm } from '../utils/scrollToUpdateForm.js';
 
 const PAGE_SIZE = 5;
 const emptyForm = {
@@ -75,7 +76,11 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
 
   async function loadOptions() {
     try {
-      setOptions(await api.getAPIKeyOptions());
+      const nextOptions = await api.getAPIKeyOptions();
+      setOptions({
+        ...nextOptions,
+        rate_limits: onlyIPPolicies(nextOptions.rate_limits)
+      });
     } catch (err) {
       setError(err.message || 'Cannot load API key options');
     }
@@ -95,6 +100,7 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
   async function submit(event) {
     event.preventDefault();
     setError('');
+    setMessage('');
     if (!form.client_id) {
       setError('Choose a client');
       return;
@@ -113,7 +119,7 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
         setTestRequest((current) => ({ ...current, apiKey: result.key }));
         setMessage('API key created. Store the raw key now; it will not be shown again.');
       }
-      resetForm();
+      resetForm(false);
       await loadKeys();
     } catch (err) {
       setError(err.message || 'Cannot save API key');
@@ -131,15 +137,17 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
       expires_at: toDateTimeLocal(key.expires_at),
       is_active: key.is_active
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollToUpdateForm();
   }
 
-  function resetForm() {
+  function resetForm(clearFeedback = true) {
     setEditingId('');
     setForm(emptyForm);
     setScopeQuery('');
-    setError('');
-    setMessage('');
+    if (clearFeedback) {
+      setError('');
+      setMessage('');
+    }
   }
 
   function toggleScope(scopeId) {
@@ -165,6 +173,8 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
 
   async function revoke(key) {
     if (!window.confirm(`Revoke ${key.label || key.key_prefix}? The current key will stop working immediately.`)) return;
+    setError('');
+    setMessage('');
     try {
       await api.revokeAPIKey(key.id);
       setMessage('API key revoked');
@@ -176,6 +186,8 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
 
   async function rotate(key) {
     if (!window.confirm(`Rotate ${key.label || key.key_prefix}? The old key will stop working immediately.`)) return;
+    setError('');
+    setMessage('');
     try {
       const result = await api.rotateAPIKey(key.id);
       setCreatedKey(result.key);
@@ -188,8 +200,14 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
   }
 
   async function copyCreatedKey() {
-    await navigator.clipboard.writeText(createdKey);
-    setMessage('API key copied');
+    setError('');
+    setMessage('');
+    try {
+      await navigator.clipboard.writeText(createdKey);
+      setMessage('API key copied');
+    } catch (err) {
+      setError(err.message || 'Cannot copy API key');
+    }
   }
 
   async function sendTest(event) {
@@ -270,7 +288,7 @@ export default function APIKeysPage({ api, baseUrl, accessToken }) {
           <Toggle label="Active" checked={form.is_active} onChange={(value) => setForm({ ...form, is_active: value })} />
           <div className="form-actions">
             <button className="primary-button" type="submit"><KeyRound size={17} />{editingId ? 'Update' : 'Create'}</button>
-            {editingId && <button className="ghost-button" type="button" onClick={resetForm}><X size={17} />Cancel</button>}
+            {editingId && <button className="ghost-button cancel-button" type="button" onClick={resetForm}><X size={17} />Cancel</button>}
           </div>
         </form>
       </Panel>
@@ -357,4 +375,8 @@ function scopeLabel(scope) {
   if (scope.code) return scope.code;
   if (scope.resource && scope.action) return `${scope.resource}:${scope.action}`;
   return scope.id || '-';
+}
+
+function onlyIPPolicies(policies) {
+  return (Array.isArray(policies) ? policies : []).filter((policy) => String(policy?.limit_type || '').toLowerCase() === 'ip');
 }

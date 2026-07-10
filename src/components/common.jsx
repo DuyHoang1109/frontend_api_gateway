@@ -1,6 +1,5 @@
 import React from 'react';
 import { AlertCircle, Check, ChevronLeft, ChevronRight, CircleCheck, Database, Edit3, Info, Plus, Save, Trash2, X } from 'lucide-react';
-import { backendFeatureStatus } from '../config/navigation.jsx';
 
 export function Panel({ title, eyebrow, children, className = '' }) {
   return (
@@ -56,8 +55,8 @@ export function FormActions({ editing, onCancel }) {
         {editing ? <Save size={17} /> : <Plus size={17} />}
         {editing ? 'Update' : 'Create'}
       </button>
-      {editing && (
-        <button className="ghost-button" type="button" onClick={onCancel}>
+      {onCancel && (
+        <button className="ghost-button cancel-button" type="button" onClick={onCancel}>
           <X size={17} />
           Cancel
         </button>
@@ -69,14 +68,18 @@ export function FormActions({ editing, onCancel }) {
 export function RowActions({ onInspect, onEdit, onDelete, children }) {
   return (
     <div className="row-actions">
-      <span className="action-group">
-        <button className="ghost-icon" onClick={onInspect} title="View detail"><Database size={16} /></button>
-        <button className="ghost-icon" onClick={onEdit} title="Edit"><Edit3 size={16} /></button>
-      </span>
+      {(onInspect || onEdit) && (
+        <span className="action-group">
+          {onInspect && <button className="ghost-icon" onClick={onInspect} title="View detail"><Database size={16} /></button>}
+          {onEdit && <button className="ghost-icon" onClick={onEdit} title="Edit"><Edit3 size={16} /></button>}
+        </span>
+      )}
       {children && <span className="action-group secondary-actions">{children}</span>}
-      <span className="action-group danger-actions">
-        <button className="danger-icon" onClick={onDelete} title="Delete"><Trash2 size={16} /></button>
-      </span>
+      {onDelete && (
+        <span className="action-group danger-actions">
+          <button className="danger-icon" onClick={onDelete} title="Delete"><Trash2 size={16} /></button>
+        </span>
+      )}
     </div>
   );
 }
@@ -101,17 +104,6 @@ export function StatusPill({ active, label }) {
   );
 }
 
-export function StatusBadge({ status }) {
-  const label =
-    status === 'bound' ? 'Bound to GW_v1' :
-    status === 'covered' ? 'Covered by another page' :
-    status === 'partial' ? 'Partially bound' :
-    status === 'local' ? 'Local only' :
-    'Backend API missing';
-
-  return <span className={`status-badge ${status}`}>{label}</span>;
-}
-
 export function InfoItem({ label, value }) {
   return (
     <div className="info-item">
@@ -131,33 +123,6 @@ export function HealthCard({ title, active, payload }) {
   );
 }
 
-export function FeatureMatrix({ onlyMissing = false }) {
-  const features = Object.entries(backendFeatureStatus)
-    .filter(([, feature]) => !onlyMissing || feature.status === 'missing');
-
-  return (
-    <table className="data-table">
-      <thead>
-        <tr>
-          <th>Module</th>
-          <th>Status</th>
-          <th>Endpoints</th>
-          <th>Notes</th>
-        </tr>
-      </thead>
-      <tbody>
-        {features.map(([id, feature]) => (
-          <tr key={id}>
-            <td><strong>{feature.title}</strong><small>{id}</small></td>
-            <td><StatusBadge status={feature.status} /></td>
-            <td>{feature.endpoints.map((endpoint) => <code className="inline-code" key={endpoint}>{endpoint}</code>)}</td>
-            <td>{feature.summary}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
 
 export function Alert({ type, message, onClose, autoDismissMs = 4000, className = '' }) {
   React.useEffect(() => {

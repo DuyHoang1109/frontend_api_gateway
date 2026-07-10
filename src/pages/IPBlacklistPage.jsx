@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, DetailModal, EmptyState, Field, FormActions, Pagination, Panel, RowActions, StatusPill, Toggle } from '../components/common.jsx';
+import { scrollToUpdateForm } from '../utils/scrollToUpdateForm.js';
 
 const PAGE_SIZE = 5;
 const emptyForm = { ip_or_cidr: '', reason: '', expires_at: '', is_active: true };
@@ -56,7 +57,7 @@ export default function IPBlacklistPage({ api }) {
       expires_at: toDateTimeLocal(entry.expires_at),
       is_active: entry.is_active
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollToUpdateForm();
   }
 
   function cancelEdit() {

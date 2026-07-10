@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { LogIn, Save, ShieldCheck } from 'lucide-react';
+import { LogIn, ShieldCheck } from 'lucide-react';
 import { Field, Panel } from '../components/common.jsx';
 
-export default function LoginPage({ currentUser, loading, onLogin, onNavigate, baseUrl, setBaseUrl, onSaveBaseUrl }) {
+export default function LoginPage({ currentUser, loading, onLogin, onNavigate, baseUrl }) {
   const [form, setForm] = useState({ username: '', password: '' });
 
   async function submit(event) {
@@ -67,11 +67,9 @@ export default function LoginPage({ currentUser, loading, onLogin, onNavigate, b
               <input
                 id="login-base-url"
                 value={baseUrl}
-                onChange={(event) => setBaseUrl(event.target.value)}
+                readOnly
+                aria-readonly="true"
               />
-              <button className="icon-button" type="button" onClick={onSaveBaseUrl} title="Save Gateway URL">
-                <Save size={16} />
-              </button>
             </div>
           </div>
         )}

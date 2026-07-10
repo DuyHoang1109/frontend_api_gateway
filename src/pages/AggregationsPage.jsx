@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Layers3, ListPlus } from 'lucide-react';
 import { Alert, DetailModal, EmptyState, Field, FormActions, Pagination, Panel, RowActions, SelectField, StatusPill, Toggle } from '../components/common.jsx';
+import { scrollToUpdateForm } from '../utils/scrollToUpdateForm.js';
 
 const PAGE_SIZE = 5;
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
@@ -71,7 +72,7 @@ export default function AggregationsPage({ api, services: shellServices = [] }) 
       ]);
       setAggregations(aggregationList);
       setServices(serviceList);
-      setRateLimits(rateLimitList);
+      setRateLimits(onlyIPPolicies(rateLimitList));
       setScopes(apiKeyOptions.api_scopes || []);
       setCorsPolicies(corsPolicyList);
       if (!selectedAggregationId && aggregationList[0]) {
@@ -160,7 +161,7 @@ export default function AggregationsPage({ api, services: shellServices = [] }) 
       cors_policy_id: aggregation.cors_policy_id || '',
       is_active: aggregation.is_active
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollToUpdateForm();
   }
 
   function editStep(step) {
@@ -174,6 +175,7 @@ export default function AggregationsPage({ api, services: shellServices = [] }) 
       response_mapping: stringifyJSON(step.response_mapping),
       is_active: step.is_active
     });
+    scrollToUpdateForm('.aggregation-steps-panel');
   }
 
   function cancelAggregationEdit() {
@@ -301,7 +303,7 @@ export default function AggregationsPage({ api, services: shellServices = [] }) 
         <Pagination page={paginated.page} pageSize={PAGE_SIZE} totalItems={aggregations.length} onPageChange={setPage} />
       </Panel>
 
-      <Panel title={selectedAggregation ? `Steps for ${selectedAggregation.name}` : 'Aggregation steps'} eyebrow="GET /admin/aggregations/:id/steps">
+      <Panel title={selectedAggregation ? `Steps for ${selectedAggregation.name}` : 'Aggregation steps'} eyebrow="GET /admin/aggregations/:id/steps" className="aggregation-steps-panel">
         <div className="aggregation-step-toolbar">
           <SelectField
             label="Aggregation"
@@ -463,4 +465,8 @@ function safeParse(value) {
   } catch {
     return {};
   }
+}
+
+function onlyIPPolicies(policies) {
+  return (Array.isArray(policies) ? policies : []).filter((policy) => String(policy?.limit_type || '').toLowerCase() === 'ip');
 }

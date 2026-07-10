@@ -14,6 +14,7 @@ import {
   StatusPill,
   Toggle
 } from '../components/common.jsx';
+import { scrollToUpdateForm } from '../utils/scrollToUpdateForm.js';
 
 const PAGE_SIZE = 5;
 const emptyForm = {
@@ -123,7 +124,7 @@ export default function ClientsPage({ api, onNavigate }) {
       owner_user_id: client.owner_user_id || '',
       is_active: client.is_active
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollToUpdateForm();
   }
 
   function cancelEdit() {

@@ -16,6 +16,7 @@ export default function ServicesPage(props) {
     routeCount,
     serviceHealth,
     healthLoading,
+    canWrite = false,
     page,
     pageSize,
     totalItems,
@@ -24,19 +25,21 @@ export default function ServicesPage(props) {
 
   return (
     <section className="content-stack">
-      <Panel title={editing ? 'Update service' : 'Create service'} eyebrow="POST /admin/services">
-        <form className="form-grid" onSubmit={onSubmit}>
-          <Field label="Name" value={form.name} onChange={(value) => setForm({ ...form, name: value })} required />
-          <Field label="Description" value={form.description || ''} onChange={(value) => setForm({ ...form, description: value })} />
-          <SelectField label="Protocol" value={form.protocol} onChange={(value) => setForm({ ...form, protocol: value })} options={['http', 'https', 'grpc']} />
-          <SelectField label="LB Strategy" value={form.lb_strategy} onChange={(value) => setForm({ ...form, lb_strategy: value })} options={['round_robin', 'weighted']} />
-          <Field label="Timeout ms" type="number" value={form.timeout_ms} onChange={(value) => setForm({ ...form, timeout_ms: value })} />
-          <Field label="Retry" type="number" value={form.retry_count} onChange={(value) => setForm({ ...form, retry_count: value })} />
-          <Toggle label="Circuit breaker" checked={form.circuit_breaker_enabled} onChange={(value) => setForm({ ...form, circuit_breaker_enabled: value })} />
-          <Toggle label="Active" checked={form.is_active} onChange={(value) => setForm({ ...form, is_active: value })} />
-          <FormActions editing={editing} onCancel={onCancel} />
-        </form>
-      </Panel>
+      {canWrite && (
+        <Panel title={editing ? 'Update service' : 'Create service'} eyebrow={editing ? 'PUT /admin/services/:id' : 'POST /admin/services'}>
+          <form className="form-grid" onSubmit={onSubmit}>
+            <Field label="Name" value={form.name} onChange={(value) => setForm({ ...form, name: value })} required />
+            <Field label="Description" value={form.description || ''} onChange={(value) => setForm({ ...form, description: value })} />
+            <SelectField label="Protocol" value={form.protocol} onChange={(value) => setForm({ ...form, protocol: value })} options={['http']} />
+            <SelectField label="LB Strategy" value={form.lb_strategy} onChange={(value) => setForm({ ...form, lb_strategy: value })} options={['round_robin', 'weighted']} />
+            <Field label="Timeout ms" type="number" value={form.timeout_ms} onChange={(value) => setForm({ ...form, timeout_ms: value })} />
+            <Field label="Retry" type="number" value={form.retry_count} onChange={(value) => setForm({ ...form, retry_count: value })} />
+            <Toggle label="Circuit breaker" checked={form.circuit_breaker_enabled} onChange={(value) => setForm({ ...form, circuit_breaker_enabled: value })} />
+            <Toggle label="Active" checked={form.is_active} onChange={(value) => setForm({ ...form, is_active: value })} />
+            <FormActions editing={editing} onCancel={onCancel} />
+          </form>
+        </Panel>
+      )}
 
       <Panel title="Services" eyebrow="GET /admin/services">
         <table className="data-table">
@@ -66,7 +69,13 @@ export default function ServicesPage(props) {
                   <td>{routeCount(service.id)}</td>
                   <td><StatusPill active={service.is_active} label={service.is_active ? 'enabled' : 'disabled'} /></td>
                   <td><StatusPill active={runtime.healthy} label={runtime.label} /></td>
-                  <td><RowActions onInspect={() => onInspect(service)} onEdit={() => onEdit(service)} onDelete={() => onDelete(service)} /></td>
+                  <td>
+                    <RowActions
+                      onInspect={() => onInspect(service)}
+                      onEdit={canWrite ? () => onEdit(service) : undefined}
+                      onDelete={canWrite ? () => onDelete(service) : undefined}
+                    />
+                  </td>
                 </tr>
               );
             })}

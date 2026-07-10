@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, DetailModal, EmptyState, Field, FormActions, Pagination, Panel, RowActions, StatusPill, Toggle } from '../components/common.jsx';
+import { scrollToUpdateForm } from '../utils/scrollToUpdateForm.js';
 
 const PAGE_SIZE = 5;
 const METHOD_OPTIONS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
@@ -67,7 +68,7 @@ export default function CORSPoliciesPage({ api }) {
       max_age: policy.max_age ?? 3600,
       is_active: policy.is_active !== false
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollToUpdateForm();
   }
 
   function cancelEdit() {
