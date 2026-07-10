@@ -3,7 +3,7 @@ import { Activity, AlertCircle, Cloud, Download, Filter, Gauge, GitFork, Globe2,
 import { Alert, EmptyState, Metric } from '../components/common.jsx';
 
 const METRIC_WINDOWS = [
-  { value: '60s', label: 'Last 60 seconds', shortLabel: '60s', interval: '5s' },
+  { value: '60s', label: 'Last 60 seconds', shortLabel: '60s', interval: '1s' },
   { value: '1h', label: 'Last 1 hour', shortLabel: '1h', interval: '5m', stream: false },
   { value: '24h', label: 'Last 24 hours', shortLabel: '24h', interval: '1h', stream: false }
 ];
@@ -15,7 +15,7 @@ export default function Dashboard({ api, services, instances, routes, health, re
   const [streamError, setStreamError] = useState('');
   const [exportMessage, setExportMessage] = useState('');
   const [exportError, setExportError] = useState('');
-  const [metricWindow, setMetricWindow] = useState('24h');
+  const [metricWindow, setMetricWindow] = useState('60s');
 
   const activeServices = services.filter((item) => item.is_active).length;
   const activeInstances = instances.filter((item) => item.is_active).length;
