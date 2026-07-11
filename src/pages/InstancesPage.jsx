@@ -1,8 +1,31 @@
 import React from 'react';
+import { Loader2, RefreshCcw } from 'lucide-react';
 import { EmptyState, Field, FormActions, Pagination, Panel, RowActions, SelectField, StatusPill, Toggle } from '../components/common.jsx';
 
 export default function InstancesPage(props) {
-  const { services, instances, form, setForm, editing, onSubmit, onCancel, onEdit, onDelete, onInspect, serviceName, canWrite = false, page, pageSize, totalItems, onPageChange } = props;
+  const {
+    services,
+    instances,
+    form,
+    setForm,
+    editing,
+    onSubmit,
+    onCancel,
+    onEdit,
+    onDelete,
+    onInspect,
+    serviceName,
+    canWrite = false,
+    instanceHealth = {},
+    healthLoading = false,
+    checkingInstanceId = '',
+    onCheckInstance,
+    canRunInstanceCheck = false,
+    page,
+    pageSize,
+    totalItems,
+    onPageChange
+  } = props;
 
   return (
     <section className="content-stack">
@@ -27,27 +50,48 @@ export default function InstancesPage(props) {
               <th>Host</th>
               <th>Port</th>
               <th>Weight</th>
-              <th>Status</th>
+              <th>Configuration</th>
+              <th>Runtime health</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
-            {instances.map((instance) => (
-              <tr key={instance.id}>
-                <td><strong>{serviceName(instance.service_id)}</strong><small>{instance.service_id}</small></td>
-                <td>{instance.host}</td>
-                <td>{instance.port}</td>
-                <td>{instance.weight}</td>
-                <td><StatusPill active={instance.is_active} label={instance.is_active ? 'active' : 'inactive'} /></td>
-                <td>
-                  <RowActions
-                    onInspect={() => onInspect(instance)}
-                    onEdit={canWrite ? () => onEdit(instance) : undefined}
-                    onDelete={canWrite ? () => onDelete(instance) : undefined}
-                  />
-                </td>
-              </tr>
-            ))}
+            {instances.map((instance) => {
+              const runtime = runtimeHealth(instance, instanceHealth[instance.id], healthLoading);
+              const checking = checkingInstanceId === instance.id;
+              return (
+                <tr key={instance.id}>
+                  <td><strong>{serviceName(instance.service_id)}</strong><small>{instance.service_id}</small></td>
+                  <td>{instance.host}</td>
+                  <td>{instance.port}</td>
+                  <td>{instance.weight}</td>
+                  <td><StatusPill active={instance.is_active} label={instance.is_active ? 'active' : 'inactive'} /></td>
+                  <td>
+                    <StatusPill active={runtime.healthy} label={runtime.label} />
+                    {runtime.detail && <small>{runtime.detail}</small>}
+                  </td>
+                  <td>
+                    <RowActions
+                      onInspect={() => onInspect(instance)}
+                      onEdit={canWrite ? () => onEdit(instance) : undefined}
+                      onDelete={canWrite ? () => onDelete(instance) : undefined}
+                    >
+                      {canRunInstanceCheck && (
+                        <button
+                          className="ghost-icon"
+                          type="button"
+                          onClick={() => onCheckInstance?.(instance.id)}
+                          disabled={checking}
+                          title="Run health check"
+                        >
+                          {checking ? <Loader2 className="spin" size={16} /> : <RefreshCcw size={16} />}
+                        </button>
+                      )}
+                    </RowActions>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
         {instances.length === 0 && <EmptyState text="No instances found" />}
@@ -55,4 +99,19 @@ export default function InstancesPage(props) {
       </Panel>
     </section>
   );
+}
+
+function runtimeHealth(instance, health, loading) {
+  if (!instance.is_active) return { healthy: false, label: 'not checked', detail: 'inactive config' };
+  if (!health) return { healthy: false, label: loading ? 'checking' : 'unknown', detail: '' };
+  if (health.error) return { healthy: false, label: 'unavailable', detail: '' };
+  if (health.status === 'alive') {
+    return {
+      healthy: true,
+      label: 'alive',
+      detail: Number.isFinite(health.latency_ms) ? `${health.latency_ms.toFixed(2)} ms` : ''
+    };
+  }
+  if (health.status === 'down') return { healthy: false, label: 'down', detail: `${health.fail_count || 0} failed` };
+  return { healthy: false, label: health.status || 'unknown', detail: '' };
 }

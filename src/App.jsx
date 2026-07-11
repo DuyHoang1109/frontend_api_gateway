@@ -52,7 +52,7 @@ const LAST_SECTION_KEY = 'gateway_admin_last_section';
 const SECTION_PERMISSIONS = {
   dashboard: ['logs:read', 'metrics:read'],
   logs: ['logs:read'],
-  healthchecks: ['health:write'],
+  healthchecks: ['health:read'],
   info: ['services:read'],
   services: ['services:read'],
   instances: ['services:write'],
@@ -201,7 +201,7 @@ export default function App() {
 
   useEffect(() => {
     if (!authUser) return;
-    if (activeSection === 'healthchecks' || activeSection === 'services') loadDetailedHealth();
+    if (activeSection === 'healthchecks' || activeSection === 'services' || activeSection === 'instances') loadDetailedHealth();
     if (activeSection === 'settings') loadCacheVersion();
   }, [activeSection, authUser, api, services, instances]);
 
@@ -760,6 +760,11 @@ export default function App() {
             onInspect={(instance) => inspectRecord('instance', instance.id)}
             serviceName={serviceName}
             canWrite={canUsePermission(authUser, 'services:write')}
+            instanceHealth={instanceHealth}
+            healthLoading={healthLoading}
+            checkingInstanceId={checkingInstanceId}
+            onCheckInstance={checkInstanceHealth}
+            canRunInstanceCheck={canUsePermission(authUser, 'health:write')}
             page={instancePage.page}
             pageSize={PAGE_SIZE}
             totalItems={filteredInstances.length}
